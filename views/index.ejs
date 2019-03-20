@@ -1,0 +1,26 @@
+<h1>Simple Virtuoso interface</h1>
+<h2>Demo</h2>
+
+<form method="POST" action="/local">
+  <p>
+    <label for="graphName"><strong>Graph URI</strong></label>
+  </p>
+  <p>
+    <input type="text" id="graphName" name="graphName" value="http://example.com" />
+  </p>
+  <p>
+    <label for="query"><strong>Query</strong></label>
+  </p>
+  <p>
+    <input type="text" value="SELECT ?subject ?predicate ?object WHERE {?subject ?predicate ?object}" name="query" id="query"
+      size="100">
+  </p>
+  <p>
+    <label for="format"><strong>Response format</strong></label>
+    <select name="format" id="format">
+      <option value="text/html">HTML</option>
+      <option value="application/json">JSON</option>
+    </select>
+  </p>
+  <input type="submit" value="Run query" />
+</form>

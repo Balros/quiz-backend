@@ -1,0 +1,24 @@
+{
+  "name": "virtuoso-nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon server.js"
+  },
+  "author": "Milan Cifra",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "ejs": "^2.6.1",
+    "express": "^4.16.4",
+    "express-layout": "^0.1.0",
+    "express-validator": "^5.3.1",
+    "virtuoso-sparql-client": "^0.2.2"
+  },
+  "devDependencies": {
+    "install": "^0.12.2",
+    "nodemon": "^1.18.9",
+    "npm": "^6.7.0"
+  }
+}

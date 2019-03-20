@@ -1,0 +1,9 @@
+<h1>Results</h1>
+
+<% if (format == 'text/html') { %>
+  <%- results %>
+<% } else if (format == 'application/json') { %>
+  <pre>
+    <%= JSON.stringify(results, undefined, 2) %>
+  </pre>
+<% } %>
