@@ -1,5 +1,5 @@
-import mongoose from "mongoose";
-import note from "../models/notebookModel.js";
+const ID = require("virtuoso-uid");
+const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 exports.getNote = (req, res) => {
   note.findById(req.params.noteId, (err, note) => {
