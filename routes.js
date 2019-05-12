@@ -1,6 +1,7 @@
 const express = require("express");
 const ID = require("virtuoso-uid");
 const router = express.Router();
+
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const graphName = "http://www.semanticweb.org/semanticweb";
@@ -27,28 +28,65 @@ router.get("/banany", (req, res) => {
   res.status(200).json({ hello: "world" });
 });
 
-router.get("/questionGroups", async (req, res) => {
-  const query =
-    "SELECT ?subject ?label WHERE {?subject foaf:author foaf:Adam; rdfs:label ?label; rdf:type foaf:Question .  }";
-  localClient.setQueryFormat(format);
-  localClient.setQueryGraph(graphName);
+router.get("/api/questionGroups", async (req, res) => {
+  // const query = null;
+  // const options = null;
+  // sparqlTransformer(query, options)
+  // .then(res => console.log(res))
+  // .catch(err => console.error(err));
+
+  // const query =
+  //   "SELECT ?subject ?label WHERE {?subject foaf:author foaf:Adam; rdfs:label ?label; a foaf:Question .  }";
+  // localClient.setQueryFormat(format);
+  // localClient.setQueryGraph(graphName);
+  // try {
+  //   const results = await localClient.query(query);
+  //   let questions = [];
+  //   for (const question of results.results.bindings) {
+  //     questions.push({
+  //       id: question.subject.value,
+  //       label: question.label.value
+  //     });
+  //   }
+  //   res.status(200).json(questions);
+  // } catch (e) {
+  //   console.log(e);
+  //   res.send("Error!");
+  // }
   try {
-    const results = await localClient.query(query);
-    let questions = [];
-    for (const question of results.results.bindings) {
-      questions.push({
-        id: question.subject.value,
-        label: question.label.value
-      });
-    }
-    res.status(200).json(questions);
+    const results = [
+      {
+        id: "id1",
+        topicLabel: "Topic name - with assignment",
+        assignment: {
+          description: "desription text lorem ipsum",
+          startTime: Date.now(),
+          endTime: Date.now(),
+          questions: {
+            approved: [
+              { id: "hahaha1", label: "this question label 1", approval: true },
+              { id: "hahaha2", label: "this question label 2", approval: true },
+            ],
+            notApproved: [
+              { id: "hahaha3", label: "this question label 3", approval: false }
+            ]
+          }
+        },
+      },
+      {
+        id: "id2",
+        topicLabel: "Topic name - without assignment"
+      }
+    ];
+    console.log(results);
+    res.status(200).json(results);
   } catch (e) {
     console.log(e);
     res.send("Error!");
   }
 });
 
-router.get("/topics", async (req, res) => {
+router.get("/api/topics", async (req, res) => {
   const query =
     "SELECT ?subject ?name WHERE {?subject rdf:type foaf:Topic . ?subject foaf:name ?name}";
   localClient.setQueryFormat(format);
@@ -66,7 +104,7 @@ router.get("/topics", async (req, res) => {
   }
 });
 
-router.get("/questionTypes", async (req, res) => {
+router.get("/api/questionTypes", async (req, res) => {
   const query =
     "SELECT ?subClass ?classLabel WHERE { ?subClass rdfs:subClassOf foaf:QuestionVersion . ?subClass rdfs:label ?classLabel. }";
   localClient.setQueryFormat(format);
@@ -87,6 +125,24 @@ router.get("/questionTypes", async (req, res) => {
   }
 });
 
+router.get("/getQuestionVersions/:uri", async (req, res) => {
+  // const almostFoaf = "<http://www.semanticweb.org/semanticweb/Question/";
+  // const questionUri = req.params.uri;
+  // console.log(almostFoaf+questionUri);
+  // const query =
+  //   "DESCRIBE * WHERE {?s foaf:ofQuestion  "+ almostFoaf+questionUri+"> }";
+  // localClient.setQueryFormat(format);
+  // localClient.setQueryGraph(graphName);
+  // try {
+  //   const results = await localClient.query(query);
+  //   console.log(results);
+  //   res.status(200).json(questionTypes);
+  // } catch (e) {
+  //   console.log(e);
+  //   res.send("Error!");
+  // }
+});
+
 router.post("/createNewQuestion", async (req, res) => {
   const author = req.body.author;
   const questionText = req.body.question;
@@ -96,6 +152,7 @@ router.post("/createNewQuestion", async (req, res) => {
 
   const foaf = "http://www.semanticweb.org/semanticweb#";
   const questionNode = await createQuestion(author, questionText, topic);
+
   const questionVersionNode = await createQuestionVersion(
     author,
     questionText,
@@ -103,13 +160,15 @@ router.post("/createNewQuestion", async (req, res) => {
     foaf,
     questionNode
   );
-  await Promise.all(answers.map(async (answer, index) => {
-    await createPredefinedAnswer(questionVersionNode, answer, index);
-  }));
+  await Promise.all(
+    answers.map(async (answer, index) => {
+      await createPredefinedAnswer(questionVersionNode, answer, index);
+    })
+  );
   localClient
     .store(true)
     .then(result => {
-      console.log("ok");
+      console.log(result);
       res.status(200).json(result);
     })
     .catch(err => {
@@ -169,7 +228,7 @@ const createQuestion = async (author, questionText, topic) => {
           .add(new Triple(node, "foaf:author", new Node(foaf + author)));
         localClient
           .getLocalStore()
-          .add(new Triple(node, "rdfs:label", new Node(questionText)));
+          .add(new Triple(node, "rdfs:label", new Text(questionText)));
         //find topic and return his Node and use(don't create new Node if possible)
         localClient
           .getLocalStore()
@@ -179,7 +238,7 @@ const createQuestion = async (author, questionText, topic) => {
       }
     })
     .catch(console.log);
-    return questionNode;
+  return questionNode;
 };
 const createQuestionVersion = async (
   author,
@@ -223,7 +282,7 @@ const createQuestionVersion = async (
       }
     })
     .catch(console.log);
-    return questionVersionNode;
+  return questionVersionNode;
 };
 
 const createPredefinedAnswer = async (
@@ -251,27 +310,57 @@ const createPredefinedAnswer = async (
         //TODO if questionType exists
         localClient
           .getLocalStore()
-          .add(new Triple(node, "rdf:type", new Node(foaf + "PredefinedAnswer")));
+          .add(
+            new Triple(
+              node,
+              "rdf:type",
+              new Node(foaf + "PredefinedAnswer"),
+              Triple.ADD
+            )
+          );
         localClient
           .getLocalStore()
-          .add(new Triple(node, "foaf:text", new Text(answer.text, "sk")));
+          .add(
+            new Triple(
+              node,
+              "foaf:text",
+              new Text(answer.text, "sk"),
+              Triple.ADD
+            )
+          );
         //TODO boolean if possible
         localClient
           .getLocalStore()
-          .add(new Triple(node, "foaf:correct", new Text(answer.correct, "sk")));
+          .add(
+            new Triple(
+              node,
+              "foaf:correct",
+              new Text(answer.correct, "sk"),
+              Triple.ADD
+            )
+          );
         //TODO integer if possible
         localClient
           .getLocalStore()
-          .add(new Triple(node, "foaf:position", new Text(position, "sk")));
+          .add(
+            new Triple(
+              node,
+              "foaf:position",
+              new Text(position, "sk"),
+              Triple.ADD
+            )
+          );
         localClient
           .getLocalStore()
-          .add(new Triple(node, "foaf:answer", questionVersionNode));
+          .add(
+            new Triple(node, "foaf:answer", questionVersionNode, Triple.ADD)
+          );
       } catch (e) {
         console.log(e);
       }
     })
     .catch(console.log);
-    return questionVersionAnswerNode;
+  return questionVersionAnswerNode;
 };
 
 module.exports = router;

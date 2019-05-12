@@ -4,9 +4,9 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "nodemon --experimental-modules server.js"
   },
-  "author": "Milan Cifra",
+  "author": "Adam Grund",
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.18.3",
@@ -14,10 +14,13 @@
     "express": "^4.16.4",
     "express-layout": "^0.1.0",
     "express-validator": "^5.3.1",
+    "sparql-transformer": "^2.0.5",
     "virtuoso-sparql-client": "^0.2.2",
     "virtuoso-uid": "^1.0.7"
   },
   "devDependencies": {
+    "@babel/core": "^7.4.3",
+    "@babel/node": "^7.2.2",
     "install": "^0.12.2",
     "nodemon": "^1.18.9",
     "npm": "^6.7.0"
