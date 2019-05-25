@@ -4,7 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon --experimental-modules server.js"
+    "start": "node server.js"
   },
   "author": "Adam Grund",
   "license": "ISC",

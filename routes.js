@@ -5,7 +5,7 @@ const router = express.Router();
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const graphName = "http://www.semanticweb.org/semanticweb";
-const format = "application/json";
+const format = "application/ld+json";
 const localClient = new Client("http://localhost:8890/sparql");
 const prefixes = {
   foaf: "http://www.semanticweb.org/semanticweb#"
@@ -56,25 +56,26 @@ router.get("/api/questionGroups", async (req, res) => {
   try {
     const results = [
       {
-        id: "id1",
+        id: "topicUri1",
         topicLabel: "Topic name - with assignment",
         assignment: {
+          id: 'questionAssignmentUri',
           description: "desription text lorem ipsum",
           startTime: Date.now(),
           endTime: Date.now(),
           questions: {
             approved: [
-              { id: "hahaha1", label: "this question label 1", approval: true },
-              { id: "hahaha2", label: "this question label 2", approval: true },
+              { id: "questionUri1", label: "this question label 1", approval: true },
+              { id: "questionUri2", label: "this question label 2", approval: true },
             ],
             notApproved: [
-              { id: "hahaha3", label: "this question label 3", approval: false }
+              { id: "questionUri3", label: "this question label 3", approval: false }
             ]
           }
         },
       },
       {
-        id: "id2",
+        id: "topicUri2",
         topicLabel: "Topic name - without assignment"
       }
     ];
@@ -88,16 +89,59 @@ router.get("/api/questionGroups", async (req, res) => {
 
 router.get("/api/topics", async (req, res) => {
   const query =
-    "SELECT ?subject ?name WHERE {?subject rdf:type foaf:Topic . ?subject foaf:name ?name}";
+    "DESCRIBE ?subject ?name WHERE {?subject rdf:type foaf:Topic . ?subject foaf:name ?name}";
   localClient.setQueryFormat(format);
   localClient.setQueryGraph(graphName);
   try {
     const results = await localClient.query(query);
-    let topics = [];
-    for (const topic of results.results.bindings) {
-      topics.push({ id: topic.subject.value, name: topic.name.value });
-    }
-    res.status(200).json(topics);
+  //   let topics = [];
+  //   for (const topic of results.results.bindings) {
+  //     topics.push({ id: topic.subject.value, name: topic.name.value });
+  //   }
+  //   res.status(200).json(topics);
+    res.status(200).json(results);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
+
+router.get("/api/getAgents", async (req, res) => {
+  try {
+    const results = [
+      {
+        name: 'John Doe',
+        id: 'thisIsUriOfJohnDoe',
+      },
+      {
+        name: 'Jane Doe',
+        id: 'thisIsUriOfJaneDoe',
+      },
+      {
+        name: 'Jimmy Doe',
+        id: 'thisIsUriOfJimmyDoe',
+      },
+    ];
+    console.log(results);
+    res.status(200).json(results);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
+
+router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
+  try {
+    const results = [
+      {
+        startDate: new Date(),
+        endDate: new Date(),
+        description: "this is description",
+        topic: "http://www.semanticweb.org/semanticweb#topic_1",
+        selectedAgents: ["thisIsUriOfJohnDoe"]
+      },
+    ];
+    res.status(200).json(results);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -125,7 +169,7 @@ router.get("/api/questionTypes", async (req, res) => {
   }
 });
 
-router.get("/getQuestionVersions/:uri", async (req, res) => {
+router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   // const almostFoaf = "<http://www.semanticweb.org/semanticweb/Question/";
   // const questionUri = req.params.uri;
   // console.log(almostFoaf+questionUri);
@@ -141,6 +185,48 @@ router.get("/getQuestionVersions/:uri", async (req, res) => {
   //   console.log(e);
   //   res.send("Error!");
   // }
+  try {
+    const results = [
+      {
+        id: "questionVersionUri1",
+        title: "questionTitle1",
+        text: "question text1",
+        topic: "topicName",
+        questionType: "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
+        answers: [{
+          id: 'answerUri1',
+          text: "text of correct answer",
+          correct: true
+        },
+        {
+          id: 'answerUri2',
+          text: "text of false answer",
+          correct: false
+        }],
+      },
+      {
+        id: "questionVersionUri2",
+        title: "questionTitle2",
+        text: "question text2",
+        topic: "topicName",
+        questionType: "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
+        answers: [{
+          id: 'answerUri3',
+          text: "text of false answer2",
+          correct: false
+        },
+        {
+          id: 'answerUri4',
+          text: "text of correct answer2",
+          correct: true
+        }],
+      }
+    ];
+    res.status(200).json(results);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
 });
 
 router.post("/createNewQuestion", async (req, res) => {
