@@ -5,7 +5,7 @@ const router = express.Router();
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const graphName = "http://www.semanticweb.org/semanticweb";
-const format = "application/ld+json";
+const format = "application/json";
 const localClient = new Client("http://localhost:8890/sparql");
 const prefixes = {
   foaf: "http://www.semanticweb.org/semanticweb#"
@@ -89,17 +89,16 @@ router.get("/api/questionGroups", async (req, res) => {
 
 router.get("/api/topics", async (req, res) => {
   const query =
-    "DESCRIBE ?subject ?name WHERE {?subject rdf:type foaf:Topic . ?subject foaf:name ?name}";
+    "SELECT ?subject ?name WHERE {?subject rdf:type foaf:Topic . ?subject foaf:name ?name}";
   localClient.setQueryFormat(format);
   localClient.setQueryGraph(graphName);
   try {
     const results = await localClient.query(query);
-  //   let topics = [];
-  //   for (const topic of results.results.bindings) {
-  //     topics.push({ id: topic.subject.value, name: topic.name.value });
-  //   }
-  //   res.status(200).json(topics);
-    res.status(200).json(results);
+    let topics = [];
+    for (const topic of results.results.bindings) {
+      topics.push({ id: topic.subject.value, name: topic.name.value });
+    }
+    res.status(200).json(topics);
   } catch (e) {
     console.log(e);
     res.send("Error!");
