@@ -20,15 +20,7 @@ ID.config({
   prefix: "http://www.semanticweb.org/semanticweb#"
 });
 
-router.get("/", (req, res) => {
-  res.render("index");
-});
-
-router.get("/banany", (req, res) => {
-  res.status(200).json({ hello: "world" });
-});
-
-router.get("/api/questionGroups", async (req, res) => {
+router.post("/api/questionGroups", async (req, res) => {
   // const query = null;
   // const options = null;
   // sparqlTransformer(query, options)
@@ -53,23 +45,28 @@ router.get("/api/questionGroups", async (req, res) => {
   //   console.log(e);
   //   res.send("Error!");
   // }
+  console.log(req.body);
+  const isTeacher = req.body.token === "teacher";
+  //TODO isTeacher should be determined by token of user
+  // provisional token
   try {
-    const results = [
+
+    const resultsTeacher = [
       {
         id: "topicUri1",
         topicLabel: "Topic name - with assignment",
         assignment: {
           id: 'questionAssignmentUri',
-          description: "desription text lorem ipsum",
-          startTime: Date.now(),
-          endTime: Date.now(),
+          description: "desription text",
+          startTime: '2019-03-14',
+          endTime: '2020-12-15',
           questions: {
             approved: [
-              { id: "questionUri1", label: "this question label 1", approval: true },
-              { id: "questionUri2", label: "this question label 2", approval: true },
+              { id: "questionUri1", label: "this question label 1", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' },
+              { id: "questionUri2", label: "this question label 2", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' }
             ],
             notApproved: [
-              { id: "questionUri3", label: "this question label 3", approval: false }
+              { id: "questionUri3", label: "this question label 3", approval: false, lastSeenTeacher: '2019-03-15', lastSeenStudent: '2019-03-14', lastChange: '2019-03-15' }
             ]
           }
         },
@@ -79,8 +76,30 @@ router.get("/api/questionGroups", async (req, res) => {
         topicLabel: "Topic name - without assignment"
       }
     ];
-    console.log(results);
-    res.status(200).json(results);
+    //get only assignments assigned to student
+    const resultsStudent = [
+      {
+        id: "topicUri1",
+        topicLabel: "Topic name - with assignment",
+        assignment: {
+          id: 'questionAssignmentUri',
+          description: "desription text",
+          startTime: '2019-03-14',
+          endTime: '2020-12-15',
+          questions: {
+            approved: [
+              { id: "questionUri1", label: "this question label 1", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' },
+              { id: "questionUri2", label: "this question label 2", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' }
+            ],
+            notApproved: [
+              { id: "questionUri3", label: "this question label 3", approval: false, lastSeenTeacher: '2019-03-15', lastSeenStudent: '2019-03-14', lastChange: '2019-03-15' }
+            ]
+          }
+        },
+      },
+    ];
+    console.log(isTeacher ? resultsTeacher : resultsStudent);
+    res.status(200).json(isTeacher ? resultsTeacher : resultsStudent);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -103,6 +122,10 @@ router.get("/api/topics", async (req, res) => {
     console.log(e);
     res.send("Error!");
   }
+});
+
+router.post("/api/addComment/:uri", async (req, res) => {
+  res.status(200).json("ok");
 });
 
 router.get("/api/getAgents", async (req, res) => {
@@ -168,7 +191,7 @@ router.get("/api/questionTypes", async (req, res) => {
   }
 });
 
-router.get("/api/getQuestionVersions/:uri", async (req, res) => {
+router.get("/api/getQuestion/:uri", async (req, res) => {
   // const almostFoaf = "<http://www.semanticweb.org/semanticweb/Question/";
   // const questionUri = req.params.uri;
   // console.log(almostFoaf+questionUri);
@@ -202,6 +225,10 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
           text: "text of false answer",
           correct: false
         }],
+        comments: [
+          {id: "commentUri1", author: "Teacher", date: "16.5.2019", text: "Comment from Teacher."},
+          {id: "commentUri2", author: "Student", date: "17.5.2019", text: "Comment from Student."}
+        ]
       },
       {
         id: "questionVersionUri2",
@@ -219,6 +246,10 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
           text: "text of correct answer2",
           correct: true
         }],
+        comments: [
+          {id: "commentUri1", author: "Teacher", date: "16.5.2019", text: "Comment from Teacher."},
+          {id: "commentUri2", author: "Student", date: "17.5.2019", text: "Comment from Student."}
+        ]
       }
     ];
     res.status(200).json(results);
