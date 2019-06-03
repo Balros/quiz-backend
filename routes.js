@@ -152,6 +152,28 @@ router.get("/api/getAgents", async (req, res) => {
   }
 });
 
+router.get("/api/getQuestionInfo/:uri", async (req, res) => {
+  try {
+    const results = false;
+    console.log(results);
+    res.status(200).json(results);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
+
+router.post("/api/approveQuestionVersion", async (req, res) => {
+  try {
+    const results = true;
+    console.log(results);
+    res.status(200).json(results);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
+
 router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   try {
     const results = [
@@ -191,7 +213,7 @@ router.get("/api/questionTypes", async (req, res) => {
   }
 });
 
-router.get("/api/getQuestion/:uri", async (req, res) => {
+router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   // const almostFoaf = "<http://www.semanticweb.org/semanticweb/Question/";
   // const questionUri = req.params.uri;
   // console.log(almostFoaf+questionUri);
