@@ -1,7 +1,7 @@
 const express = require("express");
 const ID = require("virtuoso-uid");
 const router = express.Router();
-const sparqlTransformer = require('sparql-transformer');
+const sparqlTransformer = require("sparql-transformer");
 
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
@@ -99,7 +99,7 @@ router.post("/api/questionGroups", async (req, res) => {
   //       },
   //     },
   //   ];
-    
+
   //   console.log(isTeacher ? resultsTeacher : resultsStudent);
   //   res.status(200).json(isTeacher ? resultsTeacher : resultsStudent);
   // } catch (e) {
@@ -111,23 +111,83 @@ router.post("/api/questionGroups", async (req, res) => {
     endpoint: "http://localhost:8890/sparql",
     debug: true
   };
-  const q = {
-    "proto": [{
-      "id" : "?id",
-      "name": "?name",
-    }],
-    "$where": [
-      "?id rdf:type foaf:Topic",
-      "?id foaf:name ?name"
+  const queryWithAssignments = {
+    proto: [
+      {
+        id: "?id",
+        name: "?name",
+        assignment: {
+          id: "?questionAssignmentId",
+          // id: "$foaf$required",
+          description: "?description",
+          // description: "?description$required",
+          startTime: '?startDate',
+          endTime: '?endDate',
+          questions: {}
+        }
+      }
     ],
-    "$prefixes": {
-      "foaf": "http://www.semanticweb.org/semanticweb#"
+    $where: [
+      "?id a foaf:Topic",
+      "?id foaf:name ?name",
+      "?id foaf:elaborate ?questionAssignmentId",
+      "?questionAssignmentId foaf:description ?description",
+      "?questionAssignmentId foaf:startDate ?startDate",
+      "?questionAssignmentId foaf:endDate ?endDate",
+    ],
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    "$limit": 100
+    $limit: 100
+  };
+  const queryWithoutAssignments = {
+    proto: [
+      {
+        id: "?id",
+        name: "?name",
+        assignment: {
+          // id: "?questionAssignmentId",
+          // // id: "?questionAssignmentId$required",
+          // description: "?description",
+          // // description: "?description$required",
+          // startTime: '?startDate',
+          // endTime: '?endDate',
+          // questions: {}
+        }
+      }
+    ],
+    $where: [
+      "?id rdf:type foaf:Topic",
+      "?id foaf:name ?name",
+    ],
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
+    },
+    $limit: 100
   };
   try {
-    const out = await sparqlTransformer.default(q, options);
-    res.status(200).json(out);
+    const outWithout = await sparqlTransformer.default(queryWithoutAssignments, options);
+    const outWith = await sparqlTransformer.default(queryWithAssignments, options);
+    console.log("outWithout");
+    console.log(outWithout);
+    console.log("outWith");
+    console.log(outWith);
+    const combined = outWithout;
+    outWith.forEach(topic =>{
+      let topicSame = {};
+      let indexCombined = -1;
+      combined.forEach((topicCombined, indexWihout) => {
+        if(topic.id ===  topicCombined.id){
+          topicSame = topic;
+          indexCombined = indexWihout;
+        }
+      });
+      if(topicSame !== {} && indexCombined !== -1){
+        combined.splice(indexCombined, 1);
+        combined.push(topicSame);
+      }
+    });
+    res.status(200).json(combined);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -141,21 +201,22 @@ router.get("/api/topics", async (req, res) => {
     debug: true
   };
   const q = {
-    "proto": [{
-      "id" : "?id",
-      "name": "?name",
-    }],
-    "$where": [
-      "?id rdf:type foaf:Topic",
-      "?id foaf:name ?name"
+    proto: [
+      {
+        id: "?id",
+        name: "?name"
+      }
     ],
-    "$prefixes": {
-      "foaf": "http://www.semanticweb.org/semanticweb#"
+    $where: ["?id rdf:type foaf:Topic", "?id foaf:name ?name"],
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    "$limit": 100
+    $limit: 100
   };
+  
   try {
     const out = await sparqlTransformer.default(q, options);
+    
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
@@ -174,18 +235,17 @@ router.get("/api/getAgents", async (req, res) => {
     debug: true
   };
   const q = {
-    "proto": [{
-      "id" : "?id",
-      "name": "?name",
-    }],
-    "$where": [
-      "?id rdf:type foaf:CourseStudent",
-      "?id foaf:name ?name"
+    proto: [
+      {
+        id: "?id",
+        name: "?name"
+      }
     ],
-    "$prefixes": {
-      "foaf": "http://www.semanticweb.org/semanticweb#"
+    $where: ["?id rdf:type foaf:CourseStudent", "?id foaf:name ?name"],
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    "$limit": 100
+    $limit: 100
   };
   try {
     const out = await sparqlTransformer.default(q, options);
@@ -219,17 +279,53 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
 });
 
 router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
-  try {
-    const results = [
+  
+  // try {
+  //   const results = [
+  //     {
+  //       startDate: new Date(),
+  //       endDate: new Date(),
+  //       description: "this is description",
+  //       topic: "http://www.semanticweb.org/semanticweb#topic_1",
+  //       selectedAgents: ["thisIsUriOfJohnDoe"]
+  //     }
+  //   ];
+  //   res.status(200).json(results);
+  const questionUri = req.params.uri;
+  
+  const options = {
+    context: "http://schema.org",
+    endpoint: "http://localhost:8890/sparql",
+    debug: true
+  };
+  const q = {
+    proto: [
       {
-        startDate: new Date(),
-        endDate: new Date(),
-        description: "this is description",
-        topic: "http://www.semanticweb.org/semanticweb#topic_1",
-        selectedAgents: ["thisIsUriOfJohnDoe"]
-      },
-    ];
-    res.status(200).json(results);
+        id: questionUri,
+        startDate: "?startDate",
+        endDate: "?endDate",
+        description: "?description",
+        topic: "?topic",
+        selectedAgents: {
+          id: "?idAgent"
+        }
+      }
+    ],
+    $where: [
+      questionUri + " rdf:type foaf:QuestionAssignment",
+      "?id foaf:startDate ?startDate",
+      "?id foaf:endDate ?endDate",
+      "?id foaf:description ?description",
+      "?topicId foaf:elaborate ?id"
+    ],
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
+    },
+    $limit: 100
+  };
+  try {
+    const out = await sparqlTransformer.default(q, options);
+    res.status(200).json(out);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -243,18 +339,20 @@ router.get("/api/questionTypes", async (req, res) => {
     debug: true
   };
   const q = {
-    "proto": [{
-      "id" : "?id",
-      "name": "?name",
-    }],
-    "$where": [
+    proto: [
+      {
+        id: "?id",
+        name: "?name"
+      }
+    ],
+    $where: [
       "?id rdfs:subClassOf foaf:QuestionVersion",
       "?id rdfs:label ?name"
     ],
-    "$prefixes": {
-      "foaf": "http://www.semanticweb.org/semanticweb#"
+    $prefixes: {
+      foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    "$limit": 100
+    $limit: 100
   };
   try {
     const out = await sparqlTransformer.default(q, options);
@@ -288,20 +386,33 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
         title: "questionTitle1",
         text: "question text1",
         topic: "topicName",
-        questionType: "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
-        answers: [{
-          id: 'answerUri1',
-          text: "text of correct answer",
-          correct: true
-        },
-        {
-          id: 'answerUri2',
-          text: "text of false answer",
-          correct: false
-        }],
+        questionType:
+          "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
+        answers: [
+          {
+            id: "answerUri1",
+            text: "text of correct answer",
+            correct: true
+          },
+          {
+            id: "answerUri2",
+            text: "text of false answer",
+            correct: false
+          }
+        ],
         comments: [
-          {id: "commentUri1", author: "Teacher", date: "16.5.2019", text: "Comment from Teacher."},
-          {id: "commentUri2", author: "Student", date: "17.5.2019", text: "Comment from Student."}
+          {
+            id: "commentUri1",
+            author: "Teacher",
+            date: "16.5.2019",
+            text: "Comment from Teacher."
+          },
+          {
+            id: "commentUri2",
+            author: "Student",
+            date: "17.5.2019",
+            text: "Comment from Student."
+          }
         ]
       },
       {
@@ -309,20 +420,33 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
         title: "questionTitle2",
         text: "question text2",
         topic: "topicName",
-        questionType: "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
-        answers: [{
-          id: 'answerUri3',
-          text: "text of false answer2",
-          correct: false
-        },
-        {
-          id: 'answerUri4',
-          text: "text of correct answer2",
-          correct: true
-        }],
+        questionType:
+          "http://www.semanticweb.org/semanticweb#QuestionWithPreddefinedAnswer",
+        answers: [
+          {
+            id: "answerUri3",
+            text: "text of false answer2",
+            correct: false
+          },
+          {
+            id: "answerUri4",
+            text: "text of correct answer2",
+            correct: true
+          }
+        ],
         comments: [
-          {id: "commentUri1", author: "Teacher", date: "16.5.2019", text: "Comment from Teacher."},
-          {id: "commentUri2", author: "Student", date: "17.5.2019", text: "Comment from Student."}
+          {
+            id: "commentUri1",
+            author: "Teacher",
+            date: "16.5.2019",
+            text: "Comment from Teacher."
+          },
+          {
+            id: "commentUri2",
+            author: "Student",
+            date: "17.5.2019",
+            text: "Comment from Student."
+          }
         ]
       }
     ];
@@ -349,8 +473,38 @@ router.post("/api/createTopic", async (req, res) => {
       res.status(500).json(err);
     });
 });
+router.post("/api/createQuestionAssignment", async (req, res) => {
+  const startDate = req.body.startDate;
+  const endDate = req.body.endDate;
+  const description = req.body.description;
+  const topic = req.body.topic;
+  const selectedAgents = req.body.selectedAgents;
 
-router.post("/createNewQuestion", async (req, res) => {
+  const questionAssignmentNode = await createQuestionAssignment(
+    startDate,
+    endDate,
+    description,
+    topic,
+    selectedAgents
+  );
+  await Promise.all(
+    selectedAgents.map(async (selectedAgent) => {
+      await addAssignmentToPerson(questionAssignmentNode, selectedAgent);
+    })
+  );
+  localClient
+    .store(true)
+    .then(result => {
+      console.log(result);
+      res.status(200).json(result);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).json(err);
+    });
+});
+
+router.post("/api/createNewQuestion", async (req, res) => {
   const author = req.body.author;
   const questionText = req.body.question;
   const topic = req.body.topic;
@@ -384,30 +538,7 @@ router.post("/createNewQuestion", async (req, res) => {
     });
 });
 
-router.post("/local", (req, res) => {
-  // const query = req.body.query;
-  const query =
-    "PREFIX foaf:  <http://www.semanticweb.org/semanticweb#>  SELECT * WHERE {foaf:Verzia_otazky ?predicate ?object}";
-  const format = req.body.format;
-  console.log(format);
-  const localClient = new Client("http://localhost:8890/sparql");
-  localClient.setQueryFormat(format);
-  localClient.setQueryGraph(graphName);
-
-  localClient
-    .query(query)
-    .then(results => {
-      res.render("results", {
-        results: results,
-        format: format
-      });
-    })
-    .catch(err => {
-      console.log(err);
-      res.send("Error!");
-    });
-});
-const createTopic = async (topicName) => {
+const createTopic = async topicName => {
   ID.config({
     endpoint: "http://localhost:8890/sparql",
     graph: "http://www.semanticweb.org/semanticweb",
@@ -438,6 +569,54 @@ const createTopic = async (topicName) => {
     })
     .catch(console.log);
   return questionNode;
+};
+const createQuestionAssignment = async (
+  startDate,
+  endDate,
+  description,
+  topic,
+) => {
+  ID.config({
+    endpoint: "http://localhost:8890/sparql",
+    graph: "http://www.semanticweb.org/semanticweb",
+    prefix: "http://www.semanticweb.org/semanticweb/QuestionAssignment/"
+  });
+  const foaf = "http://www.semanticweb.org/semanticweb#";
+  let questionAssignmentNode = {};
+  await ID.create()
+    .then(questionAssignmentId => {
+      try {
+        id = questionAssignmentId;
+        const node = new Node(questionAssignmentId);
+        questionAssignmentNode = node;
+        localClient.setOptions(
+          "application/json",
+          { foaf: "http://www.semanticweb.org/semanticweb#" },
+          "http://www.semanticweb.org/semanticweb"
+        );
+        localClient
+          .getLocalStore()
+          .add(new Triple(node, "rdf:type", new Node(foaf + "QuestionAssignment")));
+        //authentification->find user and retrun it as Node if possible
+        localClient
+          .getLocalStore()
+          .add(new Triple(node, "foaf:startDate", new Data(new Date(startDate).toISOString(), 'xsd:dateTime')));
+        localClient
+          .getLocalStore()
+          .add(new Triple(node, "foaf:endDate", new Data(new Date(endDate).toISOString(), 'xsd:dateTime')));
+        localClient
+          .getLocalStore()
+          .add(new Triple(node, "foaf:description", new Text(description)));
+        localClient
+          .getLocalStore()
+          .add(new Triple(new Node(topic), "foaf:elaborate", node));
+        //find topic and return his Node and use(don't create new Node if possible)
+      } catch (e) {
+        console.log(e);
+      }
+    })
+    .catch(console.log);
+  return questionAssignmentNode;
 };
 const createQuestion = async (author, questionText, topic) => {
   ID.config({
@@ -600,6 +779,31 @@ const createPredefinedAnswer = async (
       }
     })
     .catch(console.log);
+  return questionVersionAnswerNode;
+};
+
+const addAssignmentToPerson = async (
+  questionAssignmentNode, selectedAgent
+) => {
+  const foaf = "http://www.semanticweb.org/semanticweb#";
+  
+  localClient.setOptions(
+    "application/json",
+    { foaf: "http://www.semanticweb.org/semanticweb#" },
+    "http://www.semanticweb.org/semanticweb"
+  );
+  //TODO if questionType exists
+  localClient
+    .getLocalStore()
+    .add(
+      new Triple(
+        questionAssignmentNode,
+        "foaf:assignedTo",
+        new Node(selectedAgent),
+        Triple.ADD
+      )
+    );
+      
   return questionVersionAnswerNode;
 };
 
