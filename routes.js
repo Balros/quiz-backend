@@ -22,172 +22,46 @@ ID.config({
 });
 
 router.post("/api/questionGroups", async (req, res) => {
-  // const query = null;
-  // const options = null;
-  // sparqlTransformer(query, options)
-  // .then(res => console.log(res))
-  // .catch(err => console.error(err));
-
-  // const query =
-  //   "SELECT ?subject ?label WHERE {?subject foaf:author foaf:Adam; rdfs:label ?label; a foaf:Question .  }";
-  // localClient.setQueryFormat(format);
-  // localClient.setQueryGraph(graphName);
-  // try {
-  //   const results = await localClient.query(query);
-  //   let questions = [];
-  //   for (const question of results.results.bindings) {
-  //     questions.push({
-  //       id: question.subject.value,
-  //       label: question.label.value
-  //     });
-  //   }
-  //   res.status(200).json(questions);
-  // } catch (e) {
-  //   console.log(e);
-  //   res.send("Error!");
-  // }
-  console.log(req.body);
   const isTeacher = req.body.token === "teacher";
   //TODO isTeacher should be determined by token of user
   // provisional token
-  // try {
-
-  //   const resultsTeacher = [
-  //     {
-  //       id: "topicUri1",
-  //       topicLabel: "Topic name - with assignment",
-  //       assignment: {
-  //         id: 'questionAssignmentUri',
-  //         description: "desription text",
-  //         startTime: '2019-03-14',
-  //         endTime: '2020-12-15',
-  //         questions: {
-  //           approved: [
-  //             { id: "questionUri1", label: "this question label 1", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' },
-  //             { id: "questionUri2", label: "this question label 2", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' }
-  //           ],
-  //           notApproved: [
-  //             { id: "questionUri3", label: "this question label 3", approval: false, lastSeenTeacher: '2019-03-15', lastSeenStudent: '2019-03-14', lastChange: '2019-03-15' }
-  //           ]
-  //         }
-  //       },
-  //     },
-  //     {
-  //       id: "topicUri2",
-  //       topicLabel: "Topic name - without assignment"
-  //     }
-  //   ];
-  //   //get only assignments assigned to student
-  //   const resultsStudent = [
-  //     {
-  //       id: "topicUri1",
-  //       topicLabel: "Topic name - with assignment",
-  //       assignment: {
-  //         id: 'questionAssignmentUri',
-  //         description: "desription text",
-  //         startTime: '2019-03-14',
-  //         endTime: '2020-12-15',
-  //         questions: {
-  //           approved: [
-  //             { id: "questionUri1", label: "this question label 1", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' },
-  //             { id: "questionUri2", label: "this question label 2", approval: true, lastSeenTeacher: '2019-03-14', lastSeenStudent: '2019-03-15', lastChange: '2019-03-15' }
-  //           ],
-  //           notApproved: [
-  //             { id: "questionUri3", label: "this question label 3", approval: false, lastSeenTeacher: '2019-03-15', lastSeenStudent: '2019-03-14', lastChange: '2019-03-15' }
-  //           ]
-  //         }
-  //       },
-  //     },
-  //   ];
-
-  //   console.log(isTeacher ? resultsTeacher : resultsStudent);
-  //   res.status(200).json(isTeacher ? resultsTeacher : resultsStudent);
-  // } catch (e) {
-  //   console.log(e);
-  //   res.send("Error!");
-  // }
+  
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
     debug: true
   };
-  const queryWithAssignments = {
+  const q = {
     proto: [
       {
         id: "?id",
-        name: "?name",
+        name: "$foaf:name",
         assignment: {
-          id: "?questionAssignmentId",
-          // id: "$foaf$required",
-          description: "?description",
-          // description: "?description$required",
-          startTime: '?startDate',
-          endTime: '?endDate',
-          questions: {}
+          id: "$foaf:elaborate",
+          description: "$foaf:description",
+          startTime: "$foaf:startDate",
+          endTime: "$foaf:endDate",
+        },
+        questions: {
+          id: "$foaf:questionsAboutMe",
+          approved: "$foaf:approved",
+          text: "$rdfs:label"
         }
       }
     ],
     $where: [
       "?id a foaf:Topic",
-      "?id foaf:name ?name",
-      "?id foaf:elaborate ?questionAssignmentId",
-      "?questionAssignmentId foaf:description ?description",
-      "?questionAssignmentId foaf:startDate ?startDate",
-      "?questionAssignmentId foaf:endDate ?endDate",
     ],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
     $limit: 100
   };
-  const queryWithoutAssignments = {
-    proto: [
-      {
-        id: "?id",
-        name: "?name",
-        assignment: {
-          // id: "?questionAssignmentId",
-          // // id: "?questionAssignmentId$required",
-          // description: "?description",
-          // // description: "?description$required",
-          // startTime: '?startDate',
-          // endTime: '?endDate',
-          // questions: {}
-        }
-      }
-    ],
-    $where: [
-      "?id rdf:type foaf:Topic",
-      "?id foaf:name ?name",
-    ],
-    $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
-    },
-    $limit: 100
-  };
+  
   try {
-    const outWithout = await sparqlTransformer.default(queryWithoutAssignments, options);
-    const outWith = await sparqlTransformer.default(queryWithAssignments, options);
-    console.log("outWithout");
-    console.log(outWithout);
-    console.log("outWith");
-    console.log(outWith);
-    const combined = outWithout;
-    outWith.forEach(topic =>{
-      let topicSame = {};
-      let indexCombined = -1;
-      combined.forEach((topicCombined, indexWihout) => {
-        if(topic.id ===  topicCombined.id){
-          topicSame = topic;
-          indexCombined = indexWihout;
-        }
-      });
-      if(topicSame !== {} && indexCombined !== -1){
-        combined.splice(indexCombined, 1);
-        combined.push(topicSame);
-      }
-    });
-    res.status(200).json(combined);
+    const out = await sparqlTransformer.default(q, options);
+    console.log(out);
+    res.status(200).json(out);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -259,7 +133,7 @@ router.get("/api/getAgents", async (req, res) => {
 router.get("/api/getQuestionInfo/:uri", async (req, res) => {
   try {
     const results = false;
-    console.log(results);
+    // console.log(results);
     res.status(200).json(results);
   } catch (e) {
     console.log(e);
@@ -268,9 +142,12 @@ router.get("/api/getQuestionInfo/:uri", async (req, res) => {
 });
 
 router.post("/api/approveQuestionVersion", async (req, res) => {
+  const isPrivate = req.body.isPrivate;
+  const questionVersionUri = req.body.questionVersionUri;
+  console.log(req.body);
   try {
     const results = true;
-    console.log(results);
+    // console.log(results);
     res.status(200).json(results);
   } catch (e) {
     console.log(e);
@@ -508,6 +385,7 @@ router.post("/api/createNewQuestion", async (req, res) => {
   const author = req.body.author;
   const questionText = req.body.question;
   const topic = req.body.topic;
+  console.log(topic);
   const questionType = req.body.questionType;
   const answers = req.body.answers;
 
@@ -651,6 +529,12 @@ const createQuestion = async (author, questionText, topic) => {
         localClient
           .getLocalStore()
           .add(new Triple(node, "foaf:about", new Node(topic)));
+        localClient
+          .getLocalStore()
+          .add(new Triple(new Node(topic), "foaf:questionsAboutMe", node));
+        localClient
+          .getLocalStore()
+          .add(new Triple(node, "foaf:approved", new Data(false, 'xsd:boolean')));
       } catch (e) {
         console.log(e);
       }
