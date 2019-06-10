@@ -78,10 +78,10 @@ router.get("/api/topics", async (req, res) => {
     proto: [
       {
         id: "?id",
-        name: "?name"
+        name: "$foaf:name"
       }
     ],
-    $where: ["?id rdf:type foaf:Topic", "?id foaf:name ?name"],
+    $where: ["?id rdf:type foaf:Topic"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
@@ -204,12 +204,11 @@ router.get("/api/questionTypes", async (req, res) => {
     proto: [
       {
         id: "?id",
-        name: "?name"
+        name: "$rdfs:label"
       }
     ],
     $where: [
       "?id rdfs:subClassOf foaf:QuestionVersion",
-      "?id rdfs:label ?name"
     ],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
@@ -316,8 +315,6 @@ router.post("/api/createQuestionAssignment", async (req, res) => {
   const description = req.body.description;
   const topic = req.body.topic;
   const selectedAgents = req.body.selectedAgents;
-  console.log(req.body);
-  console.log("createQuestionAssignment");
 
   const questionAssignmentNode = await createQuestionAssignment(
     startDate,
@@ -364,13 +361,8 @@ router.post("/api/editQuestionAssignment", async (req, res) => {
     topic,
     dataOld
   );
-  console.log(questionAssignmentNode);
-  //TODO delete all previous agents
-  //add new agents
   let oldToRemove = dataOld.selectedAgents.filter(id => !selectedAgents.includes(id));
   let newToAdd = selectedAgents.filter(id => !dataOld.selectedAgents.includes(id));
-  console.log("oldToRemove: "+dataOld.selectedAgents);
-  console.log(selectedAgents);
   await Promise.all(
     oldToRemove.map(async (selectedAgent) => {
       await modifyAssignmentToPerson(questionAssignmentNode, selectedAgent, false);
@@ -754,7 +746,6 @@ const createPredefinedAnswer = async (
 const modifyAssignmentToPerson = async (
   questionAssignmentNode, selectedAgent, toAdd
 ) => {
-  const foaf = "http://www.semanticweb.org/semanticweb#";
   
   localClient.setOptions(
     "application/json",
