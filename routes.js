@@ -93,10 +93,15 @@ router.get("/api/topics", async (req, res) => {
     proto: [
       {
         id: "?id",
-        name: "$foaf:name"
+        name: "$foaf:name",
+        assignment: "$foaf:hasAssignment"
       }
     ],
-    $where: ["?id rdf:type foaf:Topic"],
+    $where: [
+      "?id rdf:type foaf:Topic",
+      // "?id foaf:hasAssignment ?questionAssignmentId"
+    ],
+    $filter: "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId}",
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
