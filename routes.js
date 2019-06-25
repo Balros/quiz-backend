@@ -22,8 +22,6 @@ ID.config({
 });
 
 router.post("/api/questionGroups", async (req, res) => {
-  console.log("questionGroups");
-  console.log(req.body.token);
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -83,7 +81,11 @@ router.post("/api/questionGroups", async (req, res) => {
   }
 });
 
-router.get("/api/topics", async (req, res) => {
+router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
+  console.log("topicsToCreateModifyQuestionAssignment");
+  console.log(req.body.editedQuestionAssignment);
+  const editedQuestionAssignment = decodeURIComponent(req.body.editedQuestionAssignment);
+  console.log(editedQuestionAssignment);
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -99,14 +101,17 @@ router.get("/api/topics", async (req, res) => {
     ],
     $where: [
       "?id rdf:type foaf:Topic",
-      // "?id foaf:hasAssignment ?questionAssignmentId"
-    ],
-    $filter: "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId}",
+    ],    
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
     $limit: 100
   };
+
+  q["$filter"] = 
+    editedQuestionAssignment !== "undefined" ?
+    "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId} || EXISTS{?id foaf:hasAssignment <" + editedQuestionAssignment + ">}"
+   : "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId}";
 
   try {
     const out = await sparqlTransformer.default(q, options);
