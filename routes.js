@@ -57,8 +57,13 @@ router.post("/api/questionGroups", async (req, res) => {
       !isTeacher(req.body.token) ? "?id foaf:hasAssignment ?assignmentId" : "",
       !isTeacher(req.body.token)
         ? "?assignmentId foaf:assignedTo <" + req.body.token + ">"
-        : ""
+        : "",
+      // !isTeacher(req.body.token) ? "?id foaf:questionsAboutMe ?questionId" : "",
+      // !isTeacher(req.body.token)
+      //   ? "?questionId foaf:author <" + req.body.token + ">"
+      //   : "",
     ],
+    // $filter: "foaf:author = <" + req.body.token + ">",
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
@@ -277,6 +282,7 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     proto: [
       {
         id: "<" + questionUri + ">",
+        // id: "$var:?questionUri", //TODO change for variable
         title: "$rdfs:label", //TODO
         topic: "$foaf:about",
         lastSeenByStudent: "$foaf:lastSeenByStudent",
@@ -290,7 +296,8 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
           answers: {
             id: "$foaf:answer",
             text: "$foaf:text",
-            correct: "$foaf:correct"
+            correct: "$foaf:correct",
+            position: "$foaf:position"
           },
           comments: {
             id: "$foaf:comment",
@@ -305,19 +312,25 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
       }
     ],
     $where: ["<" + questionUri + ">" + " a foaf:Question"],
-    $orderby: ["DESC(?v12)", "?v162"], //this is shit but it works
-    //sort question versions by created ?v12
-    //sort comments by created ?v162
+    $orderby: ["DESC(?v62)", "?v652", "?v643" ], //this is shit but it works
+    //sort question versions by created ?v62
+    //sort comments by created ?v652
+    //sort answers by position ?v643
+    // $groupby:"$foaf:answer",
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#",
       dcterms: "http://purl.org/dc/terms/"
     },
+    // $values: {
+    //   "questionUri": questionUri
+    // },
     $limit: 100
   };
   try {
     let data = await sparqlTransformer.default(q, options);
     if (data && data.length && data.length > 0) {
       const item = data[0];
+      console.log(item.questionVersions);
       let questionVersions = toArray(item.questionVersions);
       questionVersions.forEach(questionVersion => {
         questionVersion.answers = toArray(questionVersion.answers);
@@ -336,91 +349,79 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
 });
 
 router.post("/api/createQuestionAssignment", async (req, res) => {
+  console.log(req.body);
+  let id;
+  let dataOld;
+  if (req.body.id) {
+    id = decodeURIComponent(req.body.id);
+    dataOld = req.body.dataOld;
+  }
   const startDate = req.body.startDate;
   const endDate = req.body.endDate;
   const description = req.body.description;
   const topic = req.body.topic;
   const selectedAgents = req.body.selectedAgents;
-
-  const questionAssignmentNode = await createQuestionAssignment(
-    startDate,
-    endDate,
-    description,
-    topic,
-    selectedAgents
-  );
-  await Promise.all(
-    selectedAgents.map(async selectedAgent => {
-      await modifyAssignmentToPerson(
-        questionAssignmentNode,
-        selectedAgent,
-        true
+  const token = req.body.token;
+  if (isTeacher(token)) {
+    const questionAssignmentNode = await createQuestionAssignment(
+      startDate,
+      endDate,
+      description,
+      topic,
+      id,
+      dataOld
+    );
+    console.log(id);
+    console.log(dataOld);
+    if (id && dataOld) {
+      let oldToRemove = dataOld.selectedAgents.filter(
+        id => !selectedAgents.includes(id)
       );
-    })
-  );
-  localClient
-    .store(true)
-    .then(result => {
-      console.log(result);
-      res.status(200).json(result);
-    })
-    .catch(err => {
-      console.log(err);
-      res.status(500).json(err);
-    });
-});
-
-router.post("/api/editQuestionAssignment", async (req, res) => {
-  const id = decodeURIComponent(req.body.id);
-  const startDate = req.body.startDate;
-  const endDate = req.body.endDate;
-  const description = req.body.description;
-  const topic = req.body.topic;
-  const selectedAgents = req.body.selectedAgents;
-  const dataOld = req.body.dataOld;
-
-  const questionAssignmentNode = await editQuestionAssignment(
-    id,
-    startDate,
-    endDate,
-    description,
-    topic,
-    dataOld
-  );
-  let oldToRemove = dataOld.selectedAgents.filter(
-    id => !selectedAgents.includes(id)
-  );
-  let newToAdd = selectedAgents.filter(
-    id => !dataOld.selectedAgents.includes(id)
-  );
-  await Promise.all(
-    oldToRemove.map(async selectedAgent => {
-      await modifyAssignmentToPerson(
-        questionAssignmentNode,
-        selectedAgent,
-        false
+      let newToAdd = selectedAgents.filter(
+        id => !dataOld.selectedAgents.includes(id)
       );
-    })
-  );
-  await Promise.all(
-    newToAdd.map(async selectedAgent => {
-      await modifyAssignmentToPerson(
-        questionAssignmentNode,
-        selectedAgent,
-        true
+      await Promise.all(
+        oldToRemove.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            questionAssignmentNode,
+            selectedAgent,
+            false
+          );
+        })
       );
-    })
-  );
-  localClient
-    .store(true)
-    .then(result => {
-      console.log(result);
-      res.status(200).json(result);
-    })
-    .catch(err => {
-      console.log(err);
-      res.status(500).json(err);
-    });
+      await Promise.all(
+        newToAdd.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            questionAssignmentNode,
+            selectedAgent,
+            true
+          );
+        })
+      );
+    } else {
+      await Promise.all(
+        selectedAgents.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            questionAssignmentNode,
+            selectedAgent,
+            true
+          );
+        })
+      );
+    }
+    localClient
+      .store(true)
+      .then(result => {
+        console.log(result);
+        res.status(200).json(result);
+      })
+      .catch(err => {
+        console.log(err);
+        res.status(500).json(err);
+      });
+  } else{
+    res.status(500).json("not authorized");
+  }
 });
 
 router.post("/api/createNewQuestion", async (req, res) => {
@@ -439,8 +440,6 @@ router.post("/api/createNewQuestion", async (req, res) => {
   } else {
     questionNode = new Node(questionId);
   }
-  console.log("req.body");
-  console.log(req.body);
   const questionVersionNode = await createQuestionVersion(
     author,
     questionText,
@@ -561,7 +560,9 @@ const createQuestionAssignment = async (
   startDate,
   endDate,
   description,
-  topic
+  topic,
+  id,
+  dataOld
 ) => {
   ID.config({
     endpoint: "http://localhost:8890/sparql",
@@ -570,134 +571,116 @@ const createQuestionAssignment = async (
   });
   const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionAssignmentNode = {};
-  await ID.create()
-    .then(questionAssignmentId => {
-      try {
-        id = questionAssignmentId;
-        const node = new Node(questionAssignmentId);
-        questionAssignmentNode = node;
-        localClient.setOptions(
-          "application/json",
-          { foaf: "http://www.semanticweb.org/semanticweb#" },
-          "http://www.semanticweb.org/semanticweb"
-        );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(node, "rdf:type", new Node(foaf + "QuestionAssignment"))
-          );
-        //authentification->find user and retrun it as Node if possible
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "foaf:startDate",
-              new Data(new Date(startDate).toISOString(), "xsd:dateTime")
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "foaf:endDate",
-              new Data(new Date(endDate).toISOString(), "xsd:dateTime")
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:description", new Text(description)));
-        localClient
-          .getLocalStore()
-          .add(new Triple(new Node(topic), "foaf:hasAssignment", node));
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:elaborate", new Node(topic)));
-        //find topic and return his Node and use(don't create new Node if possible)
-      } catch (e) {
-        console.log(e);
-      }
-    })
-    .catch(console.log);
-  return questionAssignmentNode;
-};
-const editQuestionAssignment = async (
-  id,
-  startDate,
-  endDate,
-  description,
-  topic,
-  dataOld
-) => {
-  const questionAssignmentNode = new Node(id);
   try {
     localClient.setOptions(
       "application/json",
       { foaf: "http://www.semanticweb.org/semanticweb#" },
       "http://www.semanticweb.org/semanticweb"
     );
-
-    let startDateTriple = new Triple(
-      questionAssignmentNode,
-      "foaf:startDate",
-      new Data(new Date(dataOld.startDate).toISOString(), "xsd:dateTime")
-    );
-    startDateTriple.updateObject(
-      new Data(new Date(startDate).toISOString(), "xsd:dateTime")
-    );
-    const endDateTriple = new Triple(
-      questionAssignmentNode,
-      "foaf:endDate",
-      new Data(new Date(dataOld.endDate).toISOString(), "xsd:dateTime")
-    );
-    endDateTriple.updateObject(
-      new Data(new Date(endDate).toISOString(), "xsd:dateTime")
-    );
-    const descriptionTriple = new Triple(
-      questionAssignmentNode,
-      "foaf:description",
-      new Text(dataOld.description)
-    );
-    descriptionTriple.updateObject(new Text(description));
-    localClient
-      .getLocalStore()
-      .add(
-        new Triple(
-          new Node(dataOld.topic),
-          "foaf:hasAssignment",
-          questionAssignmentNode,
-          Triple.REMOVE
-        )
+    if (id && dataOld) {
+      
+      questionAssignmentNode = new Node(id);
+      let startDateTriple = new Triple(
+        questionAssignmentNode,
+        "foaf:startDate",
+        new Data(new Date(dataOld.startDate).toISOString(), "xsd:dateTime")
       );
-    localClient
-      .getLocalStore()
-      .add(
-        new Triple(
-          new Node(topic),
-          "foaf:hasAssignment",
-          questionAssignmentNode
-        )
+      startDateTriple.updateObject(
+        new Data(new Date(startDate).toISOString(), "xsd:dateTime")
       );
-    const elaborateTriple = new Triple(
-      questionAssignmentNode,
-      "foaf:elaborate",
-      new Text(dataOld.topic)
-    );
-    elaborateTriple.updateObject(new Text(topic));
-    localClient
-      .getLocalStore()
-      .bulk([
-        startDateTriple,
-        endDateTriple,
-        descriptionTriple,
-        elaborateTriple
-      ]);
+      const endDateTriple = new Triple(
+        questionAssignmentNode,
+        "foaf:endDate",
+        new Data(new Date(dataOld.endDate).toISOString(), "xsd:dateTime")
+      );
+      endDateTriple.updateObject(
+        new Data(new Date(endDate).toISOString(), "xsd:dateTime")
+      );
+      const descriptionTriple = new Triple(
+        questionAssignmentNode,
+        "foaf:description",
+        new Text(dataOld.description)
+      );
+      descriptionTriple.updateObject(new Text(description));
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
+            new Node(dataOld.topic),
+            "foaf:hasAssignment",
+            questionAssignmentNode,
+            Triple.REMOVE
+          )
+        );
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
+            new Node(topic),
+            "foaf:hasAssignment",
+            questionAssignmentNode
+          )
+        );
+      const elaborateTriple = new Triple(
+        questionAssignmentNode,
+        "foaf:elaborate",
+        new Node(dataOld.topic)
+      );
+      elaborateTriple.updateObject(new Text(topic));
+      localClient
+        .getLocalStore()
+        .bulk([
+          startDateTriple,
+          endDateTriple,
+          descriptionTriple,
+          elaborateTriple
+        ]);
+    } else {
+      await ID.create()
+        .then(questionAssignmentId => {
+          questionAssignmentNode = new Node(questionAssignmentId);
+        }).catch(console.log);
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(questionAssignmentNode, "rdf:type", new Node(foaf + "QuestionAssignment"))
+        );
+      //authentification->find user and retrun it as Node if possible
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
+            questionAssignmentNode,
+            "foaf:startDate",
+            new Data(new Date(startDate).toISOString(), "xsd:dateTime")
+          )
+        );
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
+            questionAssignmentNode,
+            "foaf:endDate",
+            new Data(new Date(endDate).toISOString(), "xsd:dateTime")
+          )
+        );
+      localClient
+        .getLocalStore()
+        .add(new Triple(questionAssignmentNode, "foaf:description", new Text(description)));
+      localClient
+        .getLocalStore()
+        .add(new Triple(new Node(topic), "foaf:hasAssignment", questionAssignmentNode));
+      localClient
+        .getLocalStore()
+        .add(new Triple(questionAssignmentNode, "foaf:elaborate", new Node(topic)));
+      //find topic and return his Node and use(don't create new Node if possible)
+    }
   } catch (e) {
     console.log(e);
-  }
+}
   return questionAssignmentNode;
 };
+
 const createQuestion = async (author, questionText, topic) => {
   ID.config({
     endpoint: "http://localhost:8890/sparql",
@@ -877,7 +860,6 @@ const createPredefinedAnswer = async (
           { foaf: "http://www.semanticweb.org/semanticweb#" },
           "http://www.semanticweb.org/semanticweb"
         );
-        //TODO if questionType exists
         localClient
           .getLocalStore()
           .add(
@@ -898,25 +880,23 @@ const createPredefinedAnswer = async (
               Triple.ADD
             )
           );
-        //TODO boolean if possible
         localClient
           .getLocalStore()
           .add(
             new Triple(
               node,
               "foaf:correct",
-              new Text(answer.correct, "sk"),
+              new Data(answer.correct, "xsd:boolean"),
               Triple.ADD
             )
           );
-        //TODO integer if possible
         localClient
           .getLocalStore()
           .add(
             new Triple(
               node,
               "foaf:position",
-              new Text(position, "sk"),
+              new Data(position, "xsd:integer"),
               Triple.ADD
             )
           );
