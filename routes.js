@@ -82,10 +82,7 @@ router.post("/api/questionGroups", async (req, res) => {
 });
 
 router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
-  console.log("topicsToCreateModifyQuestionAssignment");
-  console.log(req.body.editedQuestionAssignment);
   const editedQuestionAssignment = decodeURIComponent(req.body.editedQuestionAssignment);
-  console.log(editedQuestionAssignment);
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -150,10 +147,10 @@ router.post("/api/topics", async (req, res) => {
         ? "?questionAssignmentId foaf:endDate ?endDate"
         : ""
     ],
-    $filter: [
+    $filter: !isTeacher(author) ? [
       "?startDate < \"" + localClient.getLocalStore().now + "\"^^xsd:dateTime",
       "?endDate > \"" + localClient.getLocalStore().now + "\"^^xsd:dateTime"
-    ],
+    ] : [],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
@@ -341,7 +338,10 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
         id: "<" + questionUri + ">",
         // id: "$var:?questionUri", //TODO change for variable
         title: "$rdfs:label", //TODO
-        topic: "$foaf:about",
+        topic: {
+          id: "$foaf:about",
+          name: "$foaf:name"
+        },
         lastSeenByStudent: "$foaf:lastSeenByStudent",
         lastSeenByTeacher: "$foaf:lastSeenByTeacher",
         lastChange: "$foaf:lastChange",
