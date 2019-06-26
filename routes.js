@@ -14,14 +14,20 @@ const prefixes = {
 localClient.setQueryFormat(format);
 localClient.addPrefixes(prefixes);
 localClient.setQueryGraph(graphName);
+localClient.setOptions(
+  "application/json",
+  { foaf: "http://www.semanticweb.org/semanticweb#" },
+  "http://www.semanticweb.org/semanticweb"
+);
+const options = {
+  context: "http://schema.org",
+  endpoint: "http://localhost:8890/sparql",
+  debug: true
+};
 
 router.post("/api/questionGroups", async (req, res) => {
   const requester = req.body.token; //TODO
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
+  
   //TODO return only questions where i am author and show all to teacher
   const q = {
     proto: [
@@ -85,11 +91,6 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
   const editedQuestionAssignment = decodeURIComponent(
     req.body.editedQuestionAssignment
   );
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -124,11 +125,6 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
 
 router.post("/api/topics", async (req, res) => {
   const author = req.body.token; //TODO previest token na authora
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -192,11 +188,6 @@ router.post("/api/addComment", async (req, res) => {
 });
 
 router.get("/api/getAgents", async (req, res) => {
-  const options = {
-    // context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -224,11 +215,6 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
   const isPrivate = req.body.isPrivate;
   const questionVersionUri = req.body.questionVersionUri;
   if (isTeacher(author)) {
-    const options = {
-      // context: "http://schema.org",
-      endpoint: "http://localhost:8890/sparql",
-      debug: true
-    };
     const relation = isPrivate
       ? "foaf:approvedAsPrivate"
       : "foaf:approvedAsPublic";
@@ -256,11 +242,7 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       const lastSeenByTeacher = out[0].question.lastSeenByTeacher;
       const lastChange = out[0].question.lastChange;
 
-      localClient.setOptions(
-        "application/json",
-        { foaf: "http://www.semanticweb.org/semanticweb#" },
-        "http://www.semanticweb.org/semanticweb"
-      );
+      
 
       let approvedTripleToChange = new Triple(
         new Node(questionId),
@@ -314,11 +296,6 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
 
 router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   const questionUri = decodeURIComponent(req.params.uri);
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -353,11 +330,6 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
 });
 
 router.get("/api/questionTypes", async (req, res) => {
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -398,11 +370,6 @@ router.post("/api/createTopic", async (req, res) => {
 
 router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   const questionUri = decodeURIComponent(req.params.uri);
-  const options = {
-    context: "http://schema.org",
-    endpoint: "http://localhost:8890/sparql",
-    debug: true
-  };
   const q = {
     proto: [
       {
@@ -590,11 +557,6 @@ router.post("/api/createNewQuestion", async (req, res) => {
 const createTopic = async topicName => {
   const questionNode = await getNewNode("Topic");
   try {
-    localClient.setOptions(
-      "application/json",
-      { foaf: "http://www.semanticweb.org/semanticweb#" },
-      "http://www.semanticweb.org/semanticweb"
-      );
     const foaf = "http://www.semanticweb.org/semanticweb#";
     localClient
       .getLocalStore()
@@ -612,11 +574,6 @@ const addComment = async (questionVersionId, author, newComment, oldData) => {
   const foaf = "http://www.semanticweb.org/semanticweb#";
   if (commentNode) {
     try {
-      localClient.setOptions(
-        "application/json",
-        { foaf: "http://www.semanticweb.org/semanticweb#" },
-        "http://www.semanticweb.org/semanticweb"
-      );
       localClient
         .getLocalStore()
         .add(new Triple(commentNode, "rdf:type", new Node(foaf + "Comment")));
@@ -669,11 +626,6 @@ const createQuestionAssignment = async (
 ) => {
   let questionAssignmentNode = {};
   try {
-    localClient.setOptions(
-      "application/json",
-      { foaf: "http://www.semanticweb.org/semanticweb#" },
-      "http://www.semanticweb.org/semanticweb"
-    );
     if (id && dataOld) {
       questionAssignmentNode = new Node(id);
       let startDateTriple = new Triple(
@@ -797,11 +749,6 @@ const createQuestion = async (author, questionText, topic) => {
   const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionNode = await getNewNode("Question");
   try {
-    localClient.setOptions(
-      "application/json",
-      { foaf: "http://www.semanticweb.org/semanticweb#" },
-      "http://www.semanticweb.org/semanticweb"
-    );
     localClient
       .getLocalStore()
       .add(
@@ -843,11 +790,6 @@ const createQuestionVersion = async (
 ) => {
   let questionVersionNode = await getNewNode("QuestionVersion");
   try {
-    localClient.setOptions(
-      "application/json",
-      { foaf: "http://www.semanticweb.org/semanticweb#" },
-      "http://www.semanticweb.org/semanticweb"
-    );
     //TODO if questionType exists
     localClient
       .getLocalStore()
@@ -944,11 +886,6 @@ const createPredefinedAnswer = async (
   const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionVersionAnswerNode = await getNewNode("PredefinedAnswer");
   try {
-    localClient.setOptions(
-      "application/json",
-      { foaf: "http://www.semanticweb.org/semanticweb#" },
-      "http://www.semanticweb.org/semanticweb"
-    );
     localClient
       .getLocalStore()
       .add(
@@ -997,7 +934,7 @@ const createPredefinedAnswer = async (
   } catch (e) {
     console.log(e);
   }
-    return questionVersionAnswerNode;
+  return questionVersionAnswerNode;
 };
 
 const modifyAssignmentToPerson = async (
@@ -1005,11 +942,6 @@ const modifyAssignmentToPerson = async (
   selectedAgent,
   toAdd
 ) => {
-  localClient.setOptions(
-    "application/json",
-    { foaf: "http://www.semanticweb.org/semanticweb#" },
-    "http://www.semanticweb.org/semanticweb"
-  );
   localClient
     .getLocalStore()
     .add(
@@ -1037,7 +969,7 @@ const isTeacher = token => {
   // provisional token
   return token === "http://www.semanticweb.org/semanticweb#Teacher";
 };
-module.exports = router;
+
 async function getNewNode(nodePostfix) {
   ID.config({
     endpoint: "http://localhost:8890/sparql",
@@ -1052,4 +984,4 @@ async function getNewNode(nodePostfix) {
     .catch(console.log);
   return newNode;
 }
-
+module.exports = router;
