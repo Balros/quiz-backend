@@ -15,14 +15,8 @@ localClient.setQueryFormat(format);
 localClient.addPrefixes(prefixes);
 localClient.setQueryGraph(graphName);
 
-ID.config({
-  endpoint: "http://localhost:8890/sparql",
-  graph: "http://www.semanticweb.org/semanticweb",
-  prefix: "http://www.semanticweb.org/semanticweb#"
-});
-
 router.post("/api/questionGroups", async (req, res) => {
-  const requester = req.body.token;//TODO
+  const requester = req.body.token; //TODO
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -58,13 +52,13 @@ router.post("/api/questionGroups", async (req, res) => {
       !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
       !isTeacher(requester)
         ? "?assignmentId foaf:assignedTo <" + requester + ">"
-        : "",
+        : ""
       // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
       // !isTeacher(requester)
       //   ? "OPTIONAL{?questionId foaf:author <" + requester + ">}"
       //   : "",
     ],
-    // $filter: !isTeacher(requester) ? 
+    // $filter: !isTeacher(requester) ?
     // "(EXISTS{?id foaf:questionsAboutMe ?v3r} && ?v31 = <" + requester + ">) || NOT EXISTS{?id foaf:questionsAboutMe ?v3r}"
     // : "",
     //?v31 is author
@@ -88,7 +82,9 @@ router.post("/api/questionGroups", async (req, res) => {
 });
 
 router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
-  const editedQuestionAssignment = decodeURIComponent(req.body.editedQuestionAssignment);
+  const editedQuestionAssignment = decodeURIComponent(
+    req.body.editedQuestionAssignment
+  );
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -102,19 +98,19 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
         assignment: "$foaf:hasAssignment"
       }
     ],
-    $where: [
-      "?id rdf:type foaf:Topic",
-    ],    
+    $where: ["?id rdf:type foaf:Topic"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
     $limit: 100
   };
 
-  q["$filter"] = 
-    editedQuestionAssignment !== "undefined" ?
-    "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId} || EXISTS{?id foaf:hasAssignment <" + editedQuestionAssignment + ">}"
-   : "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId}";
+  q["$filter"] =
+    editedQuestionAssignment !== "undefined"
+      ? "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId} || EXISTS{?id foaf:hasAssignment <" +
+        editedQuestionAssignment +
+        ">}"
+      : "NOT EXISTS{?id foaf:hasAssignment ?questionAssignmentId}";
 
   try {
     const out = await sparqlTransformer.default(q, options);
@@ -149,14 +145,16 @@ router.post("/api/topics", async (req, res) => {
       !isTeacher(author)
         ? "?questionAssignmentId foaf:startDate ?startDate"
         : "",
-      !isTeacher(author)
-        ? "?questionAssignmentId foaf:endDate ?endDate"
-        : ""
+      !isTeacher(author) ? "?questionAssignmentId foaf:endDate ?endDate" : ""
     ],
-    $filter: !isTeacher(author) ? [
-      "?startDate < \"" + localClient.getLocalStore().now + "\"^^xsd:dateTime",
-      "?endDate > \"" + localClient.getLocalStore().now + "\"^^xsd:dateTime"
-    ] : [],
+    $filter: !isTeacher(author)
+      ? [
+          '?startDate < "' +
+            localClient.getLocalStore().now +
+            '"^^xsd:dateTime',
+          '?endDate > "' + localClient.getLocalStore().now + '"^^xsd:dateTime'
+        ]
+      : [],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
@@ -222,7 +220,7 @@ router.get("/api/getAgents", async (req, res) => {
 });
 
 router.post("/api/approveQuestionVersion", async (req, res) => {
-  const author = req.body.token;//TODO previest
+  const author = req.body.token; //TODO previest
   const isPrivate = req.body.isPrivate;
   const questionVersionUri = req.body.questionVersionUri;
   if (isTeacher(author)) {
@@ -231,14 +229,16 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       endpoint: "http://localhost:8890/sparql",
       debug: true
     };
-    const relation = isPrivate ? "foaf:approvedAsPrivate" : "foaf:approvedAsPublic";
+    const relation = isPrivate
+      ? "foaf:approvedAsPrivate"
+      : "foaf:approvedAsPublic";
     const q = {
       proto: [
         {
-          id: "<"+ questionVersionUri + ">",
+          id: "<" + questionVersionUri + ">",
           question: {
             id: "$foaf:ofQuestion",
-            approvedId: "$"+relation,
+            approvedId: "$" + relation,
             lastSeenByTeacher: "$foaf:lastSeenByTeacher",
             lastChange: "$foaf:lastChange"
           }
@@ -246,7 +246,7 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       ],
       $prefixes: {
         foaf: "http://www.semanticweb.org/semanticweb#"
-      },
+      }
     };
 
     try {
@@ -255,27 +255,25 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       const approvedId = out[0].question.approvedId;
       const lastSeenByTeacher = out[0].question.lastSeenByTeacher;
       const lastChange = out[0].question.lastChange;
-    
+
       localClient.setOptions(
         "application/json",
         { foaf: "http://www.semanticweb.org/semanticweb#" },
         "http://www.semanticweb.org/semanticweb"
       );
-      
+
       let approvedTripleToChange = new Triple(
         new Node(questionId),
         isPrivate ? "foaf:approvedAsPrivate" : "foaf:approvedAsPublic",
-        new Node(approvedId),
-      )
-      approvedTripleToChange.updateObject(
-        new Node(questionVersionUri)
+        new Node(approvedId)
       );
-      
+      approvedTripleToChange.updateObject(new Node(questionVersionUri));
+
       let lastChangeTriple = new Triple(
         new Node(questionId),
         "foaf:lastChange",
-        new Data(lastChange, "xsd:dateTimeStamp"),
-      )
+        new Data(lastChange, "xsd:dateTimeStamp")
+      );
       lastChangeTriple.updateObject(
         new Data(new Date().toISOString(), "xsd:dateTimeStamp")
       );
@@ -283,15 +281,19 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       let lastSeenByTeacherTriple = new Triple(
         new Node(questionId),
         "foaf:lastSeenByTeacher",
-        new Data(lastSeenByTeacher, "xsd:dateTimeStamp"),
-      )
+        new Data(lastSeenByTeacher, "xsd:dateTimeStamp")
+      );
       lastSeenByTeacherTriple.updateObject(
         new Data(new Date().toISOString(), "xsd:dateTimeStamp")
       );
 
-      
-
-      localClient.getLocalStore().bulk([approvedTripleToChange, lastChangeTriple, lastSeenByTeacherTriple,]);
+      localClient
+        .getLocalStore()
+        .bulk([
+          approvedTripleToChange,
+          lastChangeTriple,
+          lastSeenByTeacherTriple
+        ]);
     } catch (e) {
       console.log(e);
       res.send("Error!");
@@ -440,10 +442,10 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
       }
     ],
     $where: ["<" + questionUri + ">" + " a foaf:Question"],
-    $orderby: ["DESC(?v62)", "?v652", "?v643"], //this is shit but it works
-    //sort question versions by created ?v62
-    //sort comments by created ?v652
-    //sort answers by position ?v643
+    $orderby: ["DESC(?v82)", "?v852", "?v843"], //this is shit but it works
+    //sort question versions by created ?v82
+    //sort comments by created ?v852
+    //sort answers by position ?v843
     // $groupby:"$foaf:answer",
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#",
@@ -495,7 +497,7 @@ router.post("/api/createQuestionAssignment", async (req, res) => {
       topic,
       id,
       dataOld
-      );
+    );
     if (id && dataOld) {
       let oldToRemove = dataOld.selectedAgents.filter(
         id => !selectedAgents.includes(id)
@@ -586,50 +588,29 @@ router.post("/api/createNewQuestion", async (req, res) => {
 });
 
 const createTopic = async topicName => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/Topic/"
-  });
-  const foaf = "http://www.semanticweb.org/semanticweb#";
-  let questionNode = {};
-  await ID.create()
-    .then(questionId => {
-      try {
-        id = questionId;
-        const node = new Node(questionId);
-        questionNode = node;
-        localClient.setOptions(
-          "application/json",
-          { foaf: "http://www.semanticweb.org/semanticweb#" },
-          "http://www.semanticweb.org/semanticweb"
-        );
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "rdf:type", new Node(foaf + "Topic")));
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:name", new Text(topicName)));
-      } catch (e) {
-        console.log(e);
-      }
-    })
-    .catch(console.log);
+  const questionNode = await getNewNode("Topic");
+  try {
+    localClient.setOptions(
+      "application/json",
+      { foaf: "http://www.semanticweb.org/semanticweb#" },
+      "http://www.semanticweb.org/semanticweb"
+      );
+    const foaf = "http://www.semanticweb.org/semanticweb#";
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "rdf:type", new Node(foaf + "Topic")));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:name", new Text(topicName)));
+  } catch (e) {
+    console.log(e);
+  }
   return questionNode;
 };
 const addComment = async (questionVersionId, author, newComment, oldData) => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/Comment/"
-  });
+  const commentNode = await getNewNode("Comment");
   const foaf = "http://www.semanticweb.org/semanticweb#";
-  let commentNode;
-  await ID.create()
-    .then(commentIdTmp => {
-      commentNode = new Node(commentIdTmp);
-    })
-    .catch(console.log);
+  if (commentNode) {
     try {
       localClient.setOptions(
         "application/json",
@@ -660,9 +641,7 @@ const addComment = async (questionVersionId, author, newComment, oldData) => {
       );
       let lastSeenTriple = new Triple(
         new Node(decodeURIComponent(oldData.questionId)),
-        isTeacher(author)
-          ? "foaf:lastSeenByTeacher"
-          : "foaf:lastSeenByStudent",
+        isTeacher(author) ? "foaf:lastSeenByTeacher" : "foaf:lastSeenByStudent",
         new Data(
           isTeacher(author)
             ? oldData.lastSeenByTeacher
@@ -673,11 +652,11 @@ const addComment = async (questionVersionId, author, newComment, oldData) => {
       lastSeenTriple.updateObject(
         new Data(new Date().toISOString(), "xsd:dateTimeStamp")
       );
-
       localClient.getLocalStore().bulk([lastChange, lastSeenTriple]);
     } catch (e) {
       console.log(e);
     }
+  }
   return;
 };
 const createQuestionAssignment = async (
@@ -688,12 +667,6 @@ const createQuestionAssignment = async (
   id,
   dataOld
 ) => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/QuestionAssignment/"
-  });
-  const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionAssignmentNode = {};
   try {
     localClient.setOptions(
@@ -759,11 +732,8 @@ const createQuestionAssignment = async (
           elaborateTriple
         ]);
     } else {
-      await ID.create()
-        .then(questionAssignmentId => {
-          questionAssignmentNode = new Node(questionAssignmentId);
-        })
-        .catch(console.log);
+      const foaf = "http://www.semanticweb.org/semanticweb#";
+      questionAssignmentNode = await getNewNode("QuestionAssignment");
       localClient
         .getLocalStore()
         .add(
@@ -824,60 +794,44 @@ const createQuestionAssignment = async (
 };
 
 const createQuestion = async (author, questionText, topic) => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/Question/"
-  });
   const foaf = "http://www.semanticweb.org/semanticweb#";
-  let questionNode = {};
-  await ID.create()
-    .then(questionId => {
-      try {
-        id = questionId;
-        questionNode = new Node(questionId);
-        localClient.setOptions(
-          "application/json",
-          { foaf: "http://www.semanticweb.org/semanticweb#" },
-          "http://www.semanticweb.org/semanticweb"
-        );
-        localClient
-          .getLocalStore()
-          .add(new Triple(questionNode, "rdf:type", new Node(foaf + "Question")));
-        //authentification->find user and retrun it as Node if possible
-        localClient
-          .getLocalStore()
-          .add(new Triple(questionNode, "foaf:author", new Node(author)));
-        localClient
-          .getLocalStore()
-          .add(new Triple(questionNode, "rdfs:label", new Text(questionText)));
-        //find topic and return his Node and use(don't create new Node if possible)
-        localClient
-          .getLocalStore()
-          .add(new Triple(questionNode, "foaf:about", new Node(topic)));
-        localClient
-          .getLocalStore()
-          .add(new Triple(new Node(topic), "foaf:questionsAboutMe", questionNode));
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              questionNode, "foaf:approvedAsPublic", new Node()
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              questionNode, "foaf:approvedAsPrivate", new Node()
-            )
-          );
-      } catch (e) {
-        console.log(e);
-      }
-    })
-    .catch(console.log);
-  return questionNode;
+  let questionNode = await getNewNode("Question");
+  try {
+    localClient.setOptions(
+      "application/json",
+      { foaf: "http://www.semanticweb.org/semanticweb#" },
+      "http://www.semanticweb.org/semanticweb"
+    );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(questionNode, "rdf:type", new Node(foaf + "Question"))
+      );
+    //authentification->find user and retrun it as Node if possible
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:author", new Node(author)));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "rdfs:label", new Text(questionText)));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:about", new Node(topic)));
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(new Node(topic), "foaf:questionsAboutMe", questionNode)
+      );
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:approvedAsPublic", new Node()));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:approvedAsPrivate", new Node()));
+  } catch (e) {
+    console.log(e);
+  }
+    return questionNode;
 };
 
 const createQuestionVersion = async (
@@ -887,110 +841,99 @@ const createQuestionVersion = async (
   questionNode,
   oldData
 ) => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/QuestionVersion/"
-  });
-  let questionVersionNode = {};
-  await ID.create()
-    .then(questionVersionId => {
-      try {
-        const node = new Node(questionVersionId);
-        questionVersionNode = node;
-        localClient.setOptions(
-          "application/json",
-          { foaf: "http://www.semanticweb.org/semanticweb#" },
-          "http://www.semanticweb.org/semanticweb"
-        );
-        //TODO if questionType exists
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "rdf:type", new Node(questionType)));
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:text", new Text(questionText, "sk")));
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:author", new Node(author)));
-        localClient
-          .getLocalStore()
-          .add(new Triple(node, "foaf:ofQuestion", questionNode));
-        localClient
-          .getLocalStore()
-          .add(new Triple(questionNode, "foaf:version", node));
-        if (oldData) {
-          let lastChange = new Triple(
+  let questionVersionNode = await getNewNode("QuestionVersion");
+  try {
+    localClient.setOptions(
+      "application/json",
+      { foaf: "http://www.semanticweb.org/semanticweb#" },
+      "http://www.semanticweb.org/semanticweb"
+    );
+    //TODO if questionType exists
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionVersionNode, "rdf:type", new Node(questionType)));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionVersionNode, "foaf:text", new Text(questionText, "sk")));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionVersionNode, "foaf:author", new Node(author)));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionVersionNode, "foaf:ofQuestion", questionNode));
+    localClient
+      .getLocalStore()
+      .add(new Triple(questionNode, "foaf:version", questionVersionNode));
+    if (oldData) {
+      let lastChange = new Triple(
+        questionNode,
+        "foaf:lastChange",
+        new Data(oldData.lastChange, "xsd:dateTimeStamp")
+      );
+      lastChange.updateObject(
+        new Data(localClient.getLocalStore().now, "xsd:dateTimeStamp")
+      );
+      let lastSeenTriple = new Triple(
+        questionNode,
+        isTeacher(author)
+          ? "foaf:lastSeenByTeacher"
+          : "foaf:lastSeenByStudent",
+        new Data(
+          isTeacher(author)
+            ? oldData.lastSeenByTeacher
+            : oldData.lastSeenByStudent,
+          "xsd:dateTimeStamp"
+        )
+      );
+      lastSeenTriple.updateObject(
+        new Data(localClient.getLocalStore().now, "xsd:dateTimeStamp")
+      );
+      localClient.getLocalStore().bulk([lastChange, lastSeenTriple]);
+    } else {
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
             questionNode,
             "foaf:lastChange",
-            new Data(oldData.lastChange, "xsd:dateTimeStamp")
-          );
-          lastChange.updateObject(
             new Data(localClient.getLocalStore().now, "xsd:dateTimeStamp")
-          );
-          let lastSeenTriple = new Triple(
+          )
+        );
+      let time = new Date();
+      time.setHours(time.getHours() - 4);
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
             questionNode,
-            isTeacher(author)
-              ? "foaf:lastSeenByTeacher"
-              : "foaf:lastSeenByStudent",
+            "foaf:lastSeenByTeacher",
             new Data(
               isTeacher(author)
-                ? oldData.lastSeenByTeacher
-                : oldData.lastSeenByStudent,
+                ? localClient.getLocalStore().now
+                : time.toISOString(),
               "xsd:dateTimeStamp"
             )
-          );
-          lastSeenTriple.updateObject(
-            new Data(localClient.getLocalStore().now, "xsd:dateTimeStamp")
-          );
-          localClient.getLocalStore().bulk([lastChange, lastSeenTriple]);
-        } else {
-          localClient
-            .getLocalStore()
-            .add(
-              new Triple(
-                questionNode,
-                "foaf:lastChange",
-                new Data(localClient.getLocalStore().now, "xsd:dateTimeStamp")
-              )
-            );
-          let time = new Date();
-          time.setHours(time.getHours() - 4);
-          localClient
-            .getLocalStore()
-            .add(
-              new Triple(
-                questionNode,
-                "foaf:lastSeenByTeacher",
-                new Data(
-                  isTeacher(author)
-                    ? localClient.getLocalStore().now
-                    : time.toISOString(),
-                  "xsd:dateTimeStamp"
-                )
-              )
-            );
-          localClient
-            .getLocalStore()
-            .add(
-              new Triple(
-                questionNode,
-                "foaf:lastSeenByStudent",
-                new Data(
-                  !isTeacher(author)
-                    ? localClient.getLocalStore().now
-                    : time.toISOString(),
-                  "xsd:dateTimeStamp"
-                )
-              )
-            );
-        }
-      } catch (e) {
-        console.log(e);
-      }
-    })
-    .catch(console.log);
-  return questionVersionNode;
+          )
+        );
+      localClient
+        .getLocalStore()
+        .add(
+          new Triple(
+            questionNode,
+            "foaf:lastSeenByStudent",
+            new Data(
+              !isTeacher(author)
+                ? localClient.getLocalStore().now
+                : time.toISOString(),
+              "xsd:dateTimeStamp"
+            )
+          )
+        );
+    }
+  } catch (e) {
+    console.log(e);
+  }
+    return questionVersionNode;
 };
 
 const createPredefinedAnswer = async (
@@ -998,74 +941,63 @@ const createPredefinedAnswer = async (
   answer,
   position
 ) => {
-  ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/PredefinedAnswer/"
-  });
   const foaf = "http://www.semanticweb.org/semanticweb#";
-  let questionVersionAnswerNode = {};
-  await ID.create()
-    .then(nodeId => {
-      try {
-        const node = new Node(nodeId);
-        questionVersionAnswerNode = node;
-        localClient.setOptions(
-          "application/json",
-          { foaf: "http://www.semanticweb.org/semanticweb#" },
-          "http://www.semanticweb.org/semanticweb"
-        );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "rdf:type",
-              new Node(foaf + "PredefinedAnswer"),
-              Triple.ADD
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "foaf:text",
-              new Text(answer.text, "sk"),
-              Triple.ADD
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "foaf:correct",
-              new Data(answer.correct, "xsd:boolean"),
-              Triple.ADD
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(
-              node,
-              "foaf:position",
-              new Data(position, "xsd:integer"),
-              Triple.ADD
-            )
-          );
-        localClient
-          .getLocalStore()
-          .add(
-            new Triple(questionVersionNode, "foaf:answer", node, Triple.ADD)
-          );
-      } catch (e) {
-        console.log(e);
-      }
-    })
-    .catch(console.log);
-  return questionVersionAnswerNode;
+  let questionVersionAnswerNode = await getNewNode("PredefinedAnswer");
+  try {
+    localClient.setOptions(
+      "application/json",
+      { foaf: "http://www.semanticweb.org/semanticweb#" },
+      "http://www.semanticweb.org/semanticweb"
+    );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(
+          questionVersionAnswerNode,
+          "rdf:type",
+          new Node(foaf + "PredefinedAnswer"),
+          Triple.ADD
+        )
+      );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(
+          questionVersionAnswerNode,
+          "foaf:text",
+          new Text(answer.text, "sk"),
+          Triple.ADD
+        )
+      );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(
+          questionVersionAnswerNode,
+          "foaf:correct",
+          new Data(answer.correct, "xsd:boolean"),
+          Triple.ADD
+        )
+      );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(
+          questionVersionAnswerNode,
+          "foaf:position",
+          new Data(position, "xsd:integer"),
+          Triple.ADD
+        )
+      );
+    localClient
+      .getLocalStore()
+      .add(
+        new Triple(questionVersionNode, "foaf:answer", questionVersionAnswerNode, Triple.ADD)
+      );
+  } catch (e) {
+    console.log(e);
+  }
+    return questionVersionAnswerNode;
 };
 
 const modifyAssignmentToPerson = async (
@@ -1106,3 +1038,18 @@ const isTeacher = token => {
   return token === "http://www.semanticweb.org/semanticweb#Teacher";
 };
 module.exports = router;
+async function getNewNode(nodePostfix) {
+  ID.config({
+    endpoint: "http://localhost:8890/sparql",
+    graph: "http://www.semanticweb.org/semanticweb",
+    prefix: "http://www.semanticweb.org/semanticweb/"+ nodePostfix+ "/"
+  });
+  let newNode;
+  await ID.create()
+    .then(commentIdTmp => {
+      newNode = new Node(commentIdTmp);
+    })
+    .catch(console.log);
+  return newNode;
+}
+
