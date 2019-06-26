@@ -22,6 +22,7 @@ ID.config({
 });
 
 router.post("/api/questionGroups", async (req, res) => {
+  const requester = req.body.token;//TODO
   const options = {
     context: "http://schema.org",
     endpoint: "http://localhost:8890/sparql",
@@ -41,6 +42,7 @@ router.post("/api/questionGroups", async (req, res) => {
         },
         questions: {
           id: "$foaf:questionsAboutMe",
+          author: "$foaf:author",
           approved: "$foaf:approved",
           text: "$rdfs:label", //TODO
           title: "$rdfs:label", //TODO
@@ -52,16 +54,19 @@ router.post("/api/questionGroups", async (req, res) => {
     ],
     $where: [
       "?id a foaf:Topic",
-      !isTeacher(req.body.token) ? "?id foaf:hasAssignment ?assignmentId" : "",
-      !isTeacher(req.body.token)
-        ? "?assignmentId foaf:assignedTo <" + req.body.token + ">"
-        : ""
-      // !isTeacher(req.body.token) ? "?id foaf:questionsAboutMe ?questionId" : "",
-      // !isTeacher(req.body.token)
-      //   ? "?questionId foaf:author <" + req.body.token + ">"
+      !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
+      !isTeacher(requester)
+        ? "?assignmentId foaf:assignedTo <" + requester + ">"
+        : "",
+      // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
+      // !isTeacher(requester)
+      //   ? "OPTIONAL{?questionId foaf:author <" + requester + ">}"
       //   : "",
     ],
-    // $filter: "foaf:author = <" + req.body.token + ">",
+    // $filter: !isTeacher(requester) ? 
+    // "(EXISTS{?id foaf:questionsAboutMe ?v3r} && ?v31 = <" + requester + ">) || NOT EXISTS{?id foaf:questionsAboutMe ?v3r}"
+    // : "",
+    //?v31 is author
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
