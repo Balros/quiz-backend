@@ -864,8 +864,7 @@ const createPredefinedAnswer = async (
         new Triple(
           questionVersionAnswerNode,
           "rdf:type",
-          new Node(foaf + "PredefinedAnswer"),
-          Triple.ADD
+          new Node(foaf + "PredefinedAnswer")
         )
       );
     localClient
@@ -875,7 +874,6 @@ const createPredefinedAnswer = async (
           questionVersionAnswerNode,
           "foaf:text",
           new Text(answer.text, "sk"),
-          Triple.ADD
         )
       );
     localClient
@@ -885,7 +883,6 @@ const createPredefinedAnswer = async (
           questionVersionAnswerNode,
           "foaf:correct",
           new Data(answer.correct, "xsd:boolean"),
-          Triple.ADD
         )
       );
     localClient
@@ -895,13 +892,12 @@ const createPredefinedAnswer = async (
           questionVersionAnswerNode,
           "foaf:position",
           new Data(position, "xsd:integer"),
-          Triple.ADD
         )
       );
     localClient
       .getLocalStore()
       .add(
-        new Triple(questionVersionNode, "foaf:answer", questionVersionAnswerNode, Triple.ADD)
+        new Triple(questionVersionNode, "foaf:answer", questionVersionAnswerNode)
       );
   } catch (e) {
     console.log(e);
