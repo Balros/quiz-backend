@@ -30,29 +30,27 @@ router.post("/api/questionGroups", async (req, res) => {
   
   //TODO return only questions where i am author and show all to teacher
   const q = {
-    proto: [
-      {
-        id: "?id",
-        name: "$foaf:name",
-        assignment: {
-          id: "$foaf:hasAssignment",
-          description: "$foaf:description",
-          startTime: "$foaf:startDate",
-          endTime: "$foaf:endDate"
-        },
-        questions: {
-          id: "$foaf:questionsAboutMe",
-          author: "$foaf:author",
-          approvedAsPublicId: "$foaf:approvedAsPublic",
-          approvedAsPrivateId: "$foaf:approvedAsPrivate",
-          text: "$rdfs:label", //TODO
-          title: "$rdfs:label", //TODO
-          lastSeenByStudent: "$foaf:lastSeenByStudent",
-          lastSeenByTeacher: "$foaf:lastSeenByTeacher",
-          lastChange: "$foaf:lastChange"
-        }
+    proto: {
+      id: "?id",
+      name: "$foaf:name",
+      assignment: {
+        id: "$foaf:hasAssignment",
+        description: "$foaf:description",
+        startTime: "$foaf:startDate",
+        endTime: "$foaf:endDate"
+      },
+      questions: {
+        id: "$foaf:questionsAboutMe",
+        author: "$foaf:author",
+        approvedAsPublicId: "$foaf:approvedAsPublic",
+        approvedAsPrivateId: "$foaf:approvedAsPrivate",
+        text: "$rdfs:label", //TODO
+        title: "$rdfs:label", //TODO
+        lastSeenByStudent: "$foaf:lastSeenByStudent",
+        lastSeenByTeacher: "$foaf:lastSeenByTeacher",
+        lastChange: "$foaf:lastChange"
       }
-    ],
+    },
     $where: [
       "?id a foaf:Topic",
       !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
@@ -71,16 +69,14 @@ router.post("/api/questionGroups", async (req, res) => {
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
 
   try {
     let data = await sparqlTransformer.default(q, options);
-    let topics = data;
-    topics.forEach(topic => {
+    data.forEach(topic => {
       topic.questions = toArray(topic.questions);
     });
-    res.status(200).json(topics);
+    res.status(200).json(data);
   } catch (e) {
     console.log(e);
     res.send("Error!");
@@ -92,18 +88,15 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
     req.body.editedQuestionAssignment
   );
   const q = {
-    proto: [
-      {
-        id: "?id",
-        name: "$foaf:name",
-        assignment: "$foaf:hasAssignment"
-      }
-    ],
+    proto: {
+      id: "?id",
+      name: "$foaf:name",
+      assignment: "$foaf:hasAssignment"
+    },
     $where: ["?id rdf:type foaf:Topic"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
 
   q["$filter"] =
@@ -126,15 +119,13 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
 router.post("/api/topics", async (req, res) => {
   const author = req.body.token; //TODO previest token na authora
   const q = {
-    proto: [
-      {
-        id: "?id",
-        name: "$foaf:name"
-      }
-    ],
+    proto: {
+      id: "?id",
+      name: "$foaf:name"
+    },
     $where: [
       "?id rdf:type foaf:Topic",
-      !isTeacher(author) ? "?id foaf:hasAssignment ?questionAssignmentId" : "",
+      "?id foaf:hasAssignment ?questionAssignmentId",
       !isTeacher(author)
         ? "?questionAssignmentId foaf:assignedTo " + "<" + author + ">"
         : "",
@@ -154,7 +145,6 @@ router.post("/api/topics", async (req, res) => {
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
 
   try {
@@ -189,17 +179,14 @@ router.post("/api/addComment", async (req, res) => {
 
 router.get("/api/getAgents", async (req, res) => {
   const q = {
-    proto: [
-      {
-        id: "?id",
-        name: "$foaf:name"
-      }
-    ],
+    proto: {
+      id: "?id",
+      name: "$foaf:name"
+    },
     $where: ["?id rdf:type foaf:CourseStudent"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
   try {
     const out = await sparqlTransformer.default(q, options);
@@ -219,17 +206,15 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
       ? "foaf:approvedAsPrivate"
       : "foaf:approvedAsPublic";
     const q = {
-      proto: [
-        {
-          id: "<" + questionVersionUri + ">",
-          question: {
-            id: "$foaf:ofQuestion",
-            approvedId: "$" + relation,
-            lastSeenByTeacher: "$foaf:lastSeenByTeacher",
-            lastChange: "$foaf:lastChange"
-          }
+      proto: {
+        id: "<" + questionVersionUri + ">",
+        question: {
+          id: "$foaf:ofQuestion",
+          approvedId: "$" + relation,
+          lastSeenByTeacher: "$foaf:lastSeenByTeacher",
+          lastChange: "$foaf:lastChange"
         }
-      ],
+      },
       $prefixes: {
         foaf: "http://www.semanticweb.org/semanticweb#"
       }
@@ -297,31 +282,26 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
 router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   const questionUri = decodeURIComponent(req.params.uri);
   const q = {
-    proto: [
-      {
-        id: "<" + questionUri + ">",
-        startDate: "$foaf:startDate",
-        endDate: "$foaf:endDate",
-        description: "$foaf:description",
-        topic: "$foaf:elaborate",
-        selectedAgents: {
-          id: "$foaf:assignedTo"
-        }
+    proto: {
+      id: "<" + questionUri + ">",
+      startDate: "$foaf:startDate",
+      endDate: "$foaf:endDate",
+      description: "$foaf:description",
+      topic: "$foaf:elaborate",
+      selectedAgents: {
+        id: "$foaf:assignedTo"
       }
-    ],
+    },
     $where: ["<" + questionUri + ">" + " rdf:type foaf:QuestionAssignment"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
   try {
     let data = await sparqlTransformer.default(q, options);
-    if (data && data.length && data.length > 0) {
-      const item = data[0];
-      item.selectedAgents = toArray(item.selectedAgents);
-      data[0] = item;
-    }
+    const item = data[0];
+    item.selectedAgents = toArray(item.selectedAgents);
+    data = item;
     res.status(200).json(data);
   } catch (e) {
     console.log(e);
@@ -331,17 +311,14 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
 
 router.get("/api/questionTypes", async (req, res) => {
   const q = {
-    proto: [
-      {
-        id: "?id",
-        name: "$rdfs:label"
-      }
-    ],
+    proto: {
+      id: "?id",
+      name: "$rdfs:label"
+    },
     $where: ["?id rdfs:subClassOf foaf:QuestionVersion"],
     $prefixes: {
       foaf: "http://www.semanticweb.org/semanticweb#"
     },
-    $limit: 100
   };
   try {
     const out = await sparqlTransformer.default(q, options);
@@ -371,43 +348,41 @@ router.post("/api/createTopic", async (req, res) => {
 router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   const questionUri = decodeURIComponent(req.params.uri);
   const q = {
-    proto: [
-      {
-        id: "<" + questionUri + ">",
-        // id: "$var:?questionUri", //TODO change for variable
-        title: "$rdfs:label", //TODO
-        approvedAsPublicId: "$foaf:approvedAsPublic",
-        approvedAsPrivateId: "$foaf:approvedAsPrivate",
-        topic: {
-          id: "$foaf:about",
-          name: "$foaf:name"
-        },
-        lastSeenByStudent: "$foaf:lastSeenByStudent",
-        lastSeenByTeacher: "$foaf:lastSeenByTeacher",
-        lastChange: "$foaf:lastChange",
-        questionVersions: {
-          id: "$foaf:version",
+    proto: {
+      id: "<" + questionUri + ">",
+      // id: "$var:?questionUri", //TODO change for variable
+      title: "$rdfs:label", //TODO
+      approvedAsPublicId: "$foaf:approvedAsPublic",
+      approvedAsPrivateId: "$foaf:approvedAsPrivate",
+      topic: {
+        id: "$foaf:about",
+        name: "$foaf:name"
+      },
+      lastSeenByStudent: "$foaf:lastSeenByStudent",
+      lastSeenByTeacher: "$foaf:lastSeenByTeacher",
+      lastChange: "$foaf:lastChange",
+      questionVersions: {
+        id: "$foaf:version",
+        text: "$foaf:text",
+        created: "$dcterms:created",
+        questionType: "$rdf:type",
+        answers: {
+          id: "$foaf:answer",
           text: "$foaf:text",
-          created: "$dcterms:created",
-          questionType: "$rdf:type",
-          answers: {
-            id: "$foaf:answer",
-            text: "$foaf:text",
-            correct: "$foaf:correct",
-            position: "$foaf:position"
+          correct: "$foaf:correct",
+          position: "$foaf:position"
+        },
+        comments: {
+          id: "$foaf:comment",
+          author: {
+            id: "$foaf:author",
+            name: "$foaf:name"
           },
-          comments: {
-            id: "$foaf:comment",
-            author: {
-              id: "$foaf:author",
-              name: "$foaf:name"
-            },
-            date: "$dcterms:created",
-            text: "$foaf:text"
-          }
+          date: "$dcterms:created",
+          text: "$foaf:text"
         }
       }
-    ],
+    },
     $where: ["<" + questionUri + ">" + " a foaf:Question"],
     $orderby: ["DESC(?v82)", "?v852", "?v843"], //this is shit but it works
     //sort question versions by created ?v82
@@ -421,22 +396,19 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     // $values: {
     //   "questionUri": questionUri
     // },
-    $limit: 100
   };
   try {
     let data = await sparqlTransformer.default(q, options);
     if (data && data.length && data.length > 0) {
-      const item = data[0];
-      let questionVersions = toArray(item.questionVersions);
+      let questionVersions = toArray(data[0].questionVersions);
       questionVersions.forEach(questionVersion => {
         questionVersion.answers = toArray(questionVersion.answers);
         questionVersion.comments = toArray(questionVersion.comments);
       });
 
-      item.questionVersions = questionVersions;
-      data[0] = item;
+      data[0].questionVersions = questionVersions;
     }
-    res.status(200).json(data);
+    res.status(200).json(data[0]);
   } catch (e) {
     console.log(e);
     res.send("Error!");
