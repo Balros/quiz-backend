@@ -5,23 +5,26 @@ const sparqlTransformer = require("sparql-transformer");
 
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
-const graphName = "http://www.semanticweb.org/semanticweb";
+const semanticWeb = "http://www.semanticweb.org/semanticweb";
+const semanticWebW = semanticWeb + "#";
+const clientAdress = "http://localhost:8890/sparql";
+const graphName = semanticWeb;
 const format = "application/json";
-const localClient = new Client("http://localhost:8890/sparql");
+const localClient = new Client(clientAdress);
 const prefixes = {
-  foaf: "http://www.semanticweb.org/semanticweb#"
+  foaf: semanticWebW
 };
 localClient.setQueryFormat(format);
 localClient.addPrefixes(prefixes);
 localClient.setQueryGraph(graphName);
 localClient.setOptions(
   "application/json",
-  { foaf: "http://www.semanticweb.org/semanticweb#" },
-  "http://www.semanticweb.org/semanticweb"
+  { foaf: semanticWebW },
+  semanticWeb
 );
 const options = {
   context: "http://schema.org",
-  endpoint: "http://localhost:8890/sparql",
+  endpoint: clientAdress,
   debug: true
 };
 
@@ -67,7 +70,7 @@ router.post("/api/questionGroups", async (req, res) => {
     // : "",
     //?v31 is author
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
 
@@ -95,7 +98,7 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
     },
     $where: ["?id rdf:type foaf:Topic"],
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
 
@@ -143,7 +146,7 @@ router.post("/api/topics", async (req, res) => {
         ]
       : [],
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
 
@@ -185,7 +188,7 @@ router.get("/api/getAgents", async (req, res) => {
     },
     $where: ["?id rdf:type foaf:CourseStudent"],
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
   try {
@@ -216,12 +219,13 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
         }
       },
       $prefixes: {
-        foaf: "http://www.semanticweb.org/semanticweb#"
+        foaf: semanticWebW
       }
     };
 
     try {
       const out = await sparqlTransformer.default(q, options);
+      console.log(out);
       const questionId = out[0].question.id;
       const approvedId = out[0].question.approvedId;
       const lastSeenByTeacher = out[0].question.lastSeenByTeacher;
@@ -294,7 +298,7 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
     },
     $where: ["<" + questionUri + ">" + " rdf:type foaf:QuestionAssignment"],
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
   try {
@@ -317,7 +321,7 @@ router.get("/api/questionTypes", async (req, res) => {
     },
     $where: ["?id rdfs:subClassOf foaf:QuestionVersion"],
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#"
+      foaf: semanticWebW
     },
   };
   try {
@@ -390,7 +394,7 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     //sort answers by position ?v843
     // $groupby:"$foaf:answer",
     $prefixes: {
-      foaf: "http://www.semanticweb.org/semanticweb#",
+      foaf: semanticWebW,
       dcterms: "http://purl.org/dc/terms/"
     },
     // $values: {
@@ -527,39 +531,27 @@ router.post("/api/createNewQuestion", async (req, res) => {
 });
 
 const createTopic = async topicName => {
-  const questionNode = await getNewNode("Topic");
-  try {
-    const foaf = "http://www.semanticweb.org/semanticweb#";
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "rdf:type", new Node(foaf + "Topic")));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:name", new Text(topicName)));
-  } catch (e) {
-    console.log(e);
-  }
+  // ID.config({
+  //   endpoint: "http://localhost:8890/sparql",
+  //   graph: "http://www.semanticweb.org/semanticweb",
+  //   prefix: "http://www.semanticweb.org/semanticweb/Topic/"
+  // });
+  let questionNode = {};
+  questionNode = await getNewNode("Topic");
+  localStoreAdd(new Triple(questionNode, "rdf:type", new Node(semanticWebW + "Topic")));
+  localStoreAdd(new Triple(questionNode, "foaf:name", new Text(topicName)));
   return questionNode;
 };
 const addComment = async (questionVersionId, author, newComment, oldData) => {
   const commentNode = await getNewNode("Comment");
-  const foaf = "http://www.semanticweb.org/semanticweb#";
   if (commentNode) {
     try {
-      localClient
-        .getLocalStore()
-        .add(new Triple(commentNode, "rdf:type", new Node(foaf + "Comment")));
-      localClient
-        .getLocalStore()
-        .add(new Triple(commentNode, "foaf:text", new Text(newComment)));
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(new Triple(commentNode, "rdf:type", new Node(semanticWebW + "Comment")));
+      localStoreAdd(new Triple(commentNode, "foaf:text", new Text(newComment)));
+      localStoreAdd(
           new Triple(new Node(questionVersionId), "foaf:comment", commentNode)
         );
-      localClient
-        .getLocalStore()
-        .add(new Triple(commentNode, "foaf:author", new Node(author)));
+      localStoreAdd(new Triple(commentNode, "foaf:author", new Node(author)));
       let lastChange = new Triple(
         new Node(decodeURIComponent(oldData.questionId)),
         "foaf:lastChange",
@@ -622,9 +614,7 @@ const createQuestionAssignment = async (
         new Text(dataOld.description)
       );
       descriptionTriple.updateObject(new Text(description));
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(
           new Triple(
             new Node(dataOld.topic),
             "foaf:hasAssignment",
@@ -632,9 +622,7 @@ const createQuestionAssignment = async (
             Triple.REMOVE
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(
             new Node(topic),
             "foaf:hasAssignment",
@@ -656,57 +644,44 @@ const createQuestionAssignment = async (
           elaborateTriple
         ]);
     } else {
-      const foaf = "http://www.semanticweb.org/semanticweb#";
       questionAssignmentNode = await getNewNode("QuestionAssignment");
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(
           new Triple(
             questionAssignmentNode,
             "rdf:type",
-            new Node(foaf + "QuestionAssignment")
+            new Node(semanticWebW + "QuestionAssignment")
           )
         );
       //authentification->find user and retrun it as Node if possible
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(
           new Triple(
             questionAssignmentNode,
             "foaf:startDate",
             new Data(new Date(startDate).toISOString(), "xsd:dateTime")
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(
             questionAssignmentNode,
             "foaf:endDate",
             new Data(new Date(endDate).toISOString(), "xsd:dateTime")
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(
             questionAssignmentNode,
             "foaf:description",
             new Text(description)
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(
             new Node(topic),
             "foaf:hasAssignment",
             questionAssignmentNode
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(questionAssignmentNode, "foaf:elaborate", new Node(topic))
         );
       //find topic and return his Node and use(don't create new Node if possible)
@@ -718,35 +693,22 @@ const createQuestionAssignment = async (
 };
 
 const createQuestion = async (author, questionText, topic) => {
-  const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionNode = await getNewNode("Question");
+  console.log("createQuestion");
+  console.log(createQuestion);
   try {
-    localClient
-      .getLocalStore()
-      .add(
-        new Triple(questionNode, "rdf:type", new Node(foaf + "Question"))
+    localStoreAdd(
+        new Triple(questionNode, "rdf:type", new Node(semanticWebW + "Question"))
       );
     //authentification->find user and retrun it as Node if possible
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:author", new Node(author)));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "rdfs:label", new Text(questionText)));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:about", new Node(topic)));
-    localClient
-      .getLocalStore()
-      .add(
+    localStoreAdd(new Triple(questionNode, "foaf:author", new Node(author)));
+    localStoreAdd(new Triple(questionNode, "rdfs:label", new Text(questionText)));
+    localStoreAdd(new Triple(questionNode, "foaf:about", new Node(topic)));
+    localStoreAdd(
         new Triple(new Node(topic), "foaf:questionsAboutMe", questionNode)
       );
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:approvedAsPublic", new Node()));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:approvedAsPrivate", new Node()));
+    localStoreAdd(new Triple(questionNode, "foaf:approvedAsPublic", new Node()));
+    localStoreAdd(new Triple(questionNode, "foaf:approvedAsPrivate", new Node()));
   } catch (e) {
     console.log(e);
   }
@@ -763,21 +725,11 @@ const createQuestionVersion = async (
   let questionVersionNode = await getNewNode("QuestionVersion");
   try {
     //TODO if questionType exists
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionVersionNode, "rdf:type", new Node(questionType)));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionVersionNode, "foaf:text", new Text(questionText, "sk")));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionVersionNode, "foaf:author", new Node(author)));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionVersionNode, "foaf:ofQuestion", questionNode));
-    localClient
-      .getLocalStore()
-      .add(new Triple(questionNode, "foaf:version", questionVersionNode));
+    localStoreAdd(new Triple(questionVersionNode, "rdf:type", new Node(questionType)));
+    localStoreAdd(new Triple(questionVersionNode, "foaf:text", new Text(questionText, "sk")));
+    localStoreAdd(new Triple(questionVersionNode, "foaf:author", new Node(author)));
+    localStoreAdd(new Triple(questionVersionNode, "foaf:ofQuestion", questionNode));
+    localStoreAdd(new Triple(questionNode, "foaf:version", questionVersionNode));
     if (oldData) {
       let lastChange = new Triple(
         questionNode,
@@ -804,9 +756,7 @@ const createQuestionVersion = async (
       );
       localClient.getLocalStore().bulk([lastChange, lastSeenTriple]);
     } else {
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(
           new Triple(
             questionNode,
             "foaf:lastChange",
@@ -815,9 +765,7 @@ const createQuestionVersion = async (
         );
       let time = new Date();
       time.setHours(time.getHours() - 4);
-      localClient
-        .getLocalStore()
-        .add(
+      localStoreAdd(
           new Triple(
             questionNode,
             "foaf:lastSeenByTeacher",
@@ -829,9 +777,7 @@ const createQuestionVersion = async (
             )
           )
         );
-      localClient
-        .getLocalStore()
-        .add(
+        localStoreAdd(
           new Triple(
             questionNode,
             "foaf:lastSeenByStudent",
@@ -855,48 +801,31 @@ const createPredefinedAnswer = async (
   answer,
   position
 ) => {
-  const foaf = "http://www.semanticweb.org/semanticweb#";
   let questionVersionAnswerNode = await getNewNode("PredefinedAnswer");
   try {
-    localClient
-      .getLocalStore()
-      .add(
+    localStoreAdd(
         new Triple(
           questionVersionAnswerNode,
           "rdf:type",
-          new Node(foaf + "PredefinedAnswer")
+          new Node(semanticWebW + "PredefinedAnswer")
         )
       );
-    localClient
-      .getLocalStore()
-      .add(
+      localStoreAdd(
         new Triple(
           questionVersionAnswerNode,
           "foaf:text",
           new Text(answer.text, "sk"),
         )
       );
-    localClient
-      .getLocalStore()
-      .add(
+      localStoreAdd(
         new Triple(
           questionVersionAnswerNode,
           "foaf:correct",
           new Data(answer.correct, "xsd:boolean"),
         )
       );
-    localClient
-      .getLocalStore()
-      .add(
-        new Triple(
-          questionVersionAnswerNode,
-          "foaf:position",
-          new Data(position, "xsd:integer"),
-        )
-      );
-    localClient
-      .getLocalStore()
-      .add(
+    localStoreAdd(new Triple(questionVersionAnswerNode, "foaf:position", new Data(position, "xsd:integer")));
+    localStoreAdd(
         new Triple(questionVersionNode, "foaf:answer", questionVersionAnswerNode)
       );
   } catch (e) {
@@ -910,9 +839,7 @@ const modifyAssignmentToPerson = async (
   selectedAgent,
   toAdd
 ) => {
-  localClient
-    .getLocalStore()
-    .add(
+  localStoreAdd(
       new Triple(
         questionAssignmentNode,
         "foaf:assignedTo",
@@ -935,14 +862,20 @@ const toArray = input => {
 const isTeacher = token => {
   //TODO isTeacher should be determined by token of user
   // provisional token
-  return token === "http://www.semanticweb.org/semanticweb#Teacher";
+  return token === semanticWebW + "Teacher";
 };
+
+function localStoreAdd(triple) {
+  localClient
+    .getLocalStore()
+    .add(triple);
+}
 
 async function getNewNode(nodePostfix) {
   ID.config({
-    endpoint: "http://localhost:8890/sparql",
-    graph: "http://www.semanticweb.org/semanticweb",
-    prefix: "http://www.semanticweb.org/semanticweb/"+ nodePostfix+ "/"
+    endpoint: clientAdress,
+    graph: semanticWeb,
+    prefix: semanticWeb +"/"+ nodePostfix+ "/"
   });
   let newNode;
   await ID.create()
