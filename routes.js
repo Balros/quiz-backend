@@ -163,7 +163,6 @@ router.post("/api/addComment", async (req, res) => {
   //TODO previest token na authora
   const newComment = req.body.newComment;
   const dataOld = await getLastSeen(questionId);
-  console.log(dataOld);
   await addComment(questionVersionId, author, newComment, questionId, dataOld);
 
   localClient
@@ -222,7 +221,6 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
 
     try {
       const out = await sparqlTransformer.default(q, options);
-      console.log(out);
       const questionId = out[0].question.id;
       const approvedId = out[0].question.approvedId;
       const lastSeenByTeacher = out[0].question.lastSeenByTeacher;
@@ -395,9 +393,9 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
 });
 
 router.post("/api/createQuestionAssignment", async (req, res) => {
-  let id;
+  let questionAssignmentId;
   if (req.body.id) {
-    id = decodeURIComponent(req.body.id);
+    questionAssignmentId = decodeURIComponent(req.body.id);
   }
   const startDate = req.body.startDate;
   const endDate = req.body.endDate;
@@ -407,22 +405,22 @@ router.post("/api/createQuestionAssignment", async (req, res) => {
   const token = req.body.token;
   if (isTeacher(token)) {
     let oldData;
-    if (id) {
-      oldData = getQuestionAssignment(id);
+    if (questionAssignmentId) {
+      oldData = await getQuestionAssignment(questionAssignmentId);
     }
     const questionAssignmentNode = await createQuestionAssignment(
       startDate,
       endDate,
       description,
       topic,
-      id,
+      questionAssignmentId,
       oldData
     );
-    if (id && oldData) {
-      let oldToRemove = oldData.selectedAgents.filter(
+    if (questionAssignmentId && oldData) {
+      const oldToRemove = oldData.selectedAgents.filter(
         id => !selectedAgents.includes(id)
       );
-      let newToAdd = selectedAgents.filter(
+      const newToAdd = selectedAgents.filter(
         id => !oldData.selectedAgents.includes(id)
       );
       await Promise.all(
@@ -475,45 +473,53 @@ router.post("/api/createNewQuestion", async (req, res) => {
   const topic = req.body.topic;
   const questionType = req.body.questionType;
   const answers = req.body.answers;
-  const questionId = decodeURIComponent(req.body.questionId);
+  const questionId = req.body.questionId;
+  console.log("req.body.questionId");
+  console.log(req.body.questionId);
 
   let questionNode;
   let oldData;
-  if (questionId === "undefined") {
-    questionNode = await createQuestion(author, questionText, topic);
-  } else {
-    questionNode = new Node(questionId);
-    oldData = await getLastSeen(questionId);
-  }
-  const questionVersionNode = await createQuestionVersion(
-    author,
-    questionText,
-    questionType,
-    questionNode,
-    questionId ? oldData : null
-  );
-  await Promise.all(
-    answers.map(async (answer, index) => {
-      await createPredefinedAnswer(questionVersionNode, answer, index);
-    })
-  );
-  localClient
-    .store(true)
-    .then(result => {
-      res.status(200).json(result);
-    })
-    .catch(err => {
-      console.log(err);
-      res.status(500).json(err);
-    });
+  const authorizationData = await getAuthorizationData(topic, author, questionId);
+  console.log(authorizationData);
+  if (isAuthorizedForAddingQuestion(authorizationData)) {
+  //skontrolovat ci sedi: assignment k cloveku, ci je v casovom limite
+    if (questionId === undefined) {
+      console.log("questionId === undefined");
+      questionNode = await createQuestion(author, questionText, topic);
+    } else {
+      console.log("isAuthorizedForCreatingQuestionVersion == true");
+      //skontrolovat otazka k cloveku
+      questionNode = new Node(questionId);
+      oldData = await getLastSeen(questionId);
+    }
+    const questionVersionNode = await createQuestionVersion(
+      author,
+      questionText,
+      questionType,
+      questionNode,
+      questionId ? oldData : null
+    );
+    await Promise.all(
+      answers.map(async (answer, index) => {
+        await createPredefinedAnswer(questionVersionNode, answer, index);
+      })
+    );
+    localClient
+      .store(true)
+      .then(result => {
+        res.status(200).json(result);
+      })
+      .catch(err => {
+        console.log(err);
+        res.status(500).json(err);
+      });
+    } else {
+      console.log("unauthorized")
+      res.status(401).json("Unauthorized");
+    }
 });
 
 const createTopic = async topicName => {
-  // ID.config({
-  //   endpoint: "http://localhost:8890/sparql",
-  //   graph: "http://www.semanticweb.org/semanticweb",
-  //   prefix: "http://www.semanticweb.org/semanticweb/Topic/"
-  // });
   let questionNode = {};
   questionNode = await getNewNode("Topic");
   localStoreAdd(
@@ -523,8 +529,6 @@ const createTopic = async topicName => {
   return questionNode;
 };
 const addComment = async (questionVersionId, author, newComment, questionId, oldData) => {
-  console.log("oldData");
-  console.log(oldData);
   const commentNode = await getNewNode("Comment");
   if (commentNode) {
     try {
@@ -575,6 +579,8 @@ const createQuestionAssignment = async (
   let questionAssignmentNode = {};
   try {
     if (id && dataOld) {
+      console.log("dataOld.startDate");
+      console.log(dataOld.startDate);
       questionAssignmentNode = new Node(id);
       let startDateTriple = new Triple(
         questionAssignmentNode,
@@ -636,7 +642,6 @@ const createQuestionAssignment = async (
           new Node(semanticWebW + "QuestionAssignment")
         )
       );
-      //authentification->find user and retrun it as Node if possible
       localStoreAdd(
         new Triple(
           questionAssignmentNode,
@@ -668,7 +673,6 @@ const createQuestionAssignment = async (
       localStoreAdd(
         new Triple(questionAssignmentNode, "foaf:elaborate", new Node(topic))
       );
-      //find topic and return his Node and use(don't create new Node if possible)
     }
   } catch (e) {
     console.log(e);
@@ -678,13 +682,10 @@ const createQuestionAssignment = async (
 
 const createQuestion = async (author, questionText, topic) => {
   let questionNode = await getNewNode("Question");
-  console.log("createQuestion");
-  console.log(createQuestion);
   try {
     localStoreAdd(
       new Triple(questionNode, "rdf:type", new Node(semanticWebW + "Question"))
     );
-    //authentification->find user and retrun it as Node if possible
     localStoreAdd(new Triple(questionNode, "foaf:author", new Node(author)));
     localStoreAdd(
       new Triple(questionNode, "rdfs:label", new Text(questionText))
@@ -730,7 +731,6 @@ const createQuestionVersion = async (
     localStoreAdd(
       new Triple(questionNode, "foaf:version", questionVersionNode)
     );
-    console.log(oldData);
     if (oldData) {
       let lastChange = new Triple(
         questionNode,
@@ -893,6 +893,10 @@ async function getQuestionAssignment(questionAssignmentUri) {
     let data = await sparqlTransformer.default(q, options);
     const item = data[0];
     item.selectedAgents = toArray(item.selectedAgents);
+    const selectedAgentsTmp = item.selectedAgents.map(selectedAgent => {
+      return selectedAgent.id;
+    });
+    item.selectedAgents = Array.from(selectedAgentsTmp);
     data = item;
     return data;
   } catch (e) {
@@ -921,6 +925,65 @@ async function getLastSeen(questionId) {
     console.log(e);
     return "undefined";
   }
+}
+
+const getAuthorizationData = async(topicId, author, questionId) => {
+  const q = {
+    proto: {
+      id: "<" + topicId + ">",
+      questionAssignment: {
+        id: "$foaf:hasAssignment",
+        startDate: "$foaf:startDate",
+        endDate: "$foaf:endDate",
+      },
+      question: {
+        id: "$foaf:questionsAboutMe"
+      }
+    },
+    $where: [
+      "<" + topicId + ">" + " a foaf:Topic",
+      "<" + topicId + ">" +" foaf:hasAssignment ?assignmentId",
+      "?assignmentId foaf:assignedTo " + "<" + author + ">",
+      "?assignmentId foaf:startDate ?startDate",
+	    "?assignmentId foaf:endDate ?endDate",
+      questionId ? "<" + topicId + ">" + " foaf:questionsAboutMe " + "<" + questionId + ">" : "",
+      questionId ? "<" + questionId + ">" + " foaf:author " + "<" + author + ">" : "",
+    ],
+    $filter: [
+      "?startDate <= NOW()",
+      "?endDate >= NOW()",
+    ],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    console.log("data");
+    console.log(data);
+    return data[0];
+  } catch (e) {
+    console.log(e);
+    return undefined;
+  }
+}
+const isAuthorizedForAddingQuestion = (authorizationData) => {
+  console.log("isAuthorizedForAddingQuestion");
+  if (
+    authorizationData &&
+    authorizationData.questionAssignment &&
+    new Date(authorizationData.questionAssignment.startDate) < new Date() &&
+    new Date(authorizationData.questionAssignment.endDate) > new Date()
+  ) {
+    console.log(true);
+    return true;
+  }
+  console.log(false);
+  return false;
+}
+
+const isAuthorizedForCreatingQuestionVersion = (authorizationData) => {
+  return false;
 }
 
 function localStoreAdd(triple) {
