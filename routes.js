@@ -195,6 +195,33 @@ router.get("/api/getAgents", async (req, res) => {
     res.send("Error!");
   }
 });
+router.get("/api/getQuestions", async (req, res) => {
+  const q = {
+    proto: {
+      id: "?id",
+      title: "$rdfs:label",
+      topic: "$foaf:about"
+    },
+    $where: [
+      "?id rdf:type foaf:Question",
+      "?id foaf:approvedAsPublic ?approvedAsPublicId",
+      "?id foaf:approvedAsPrivate ?approvedAsPrivateId"
+    ],
+    $filter: [
+      "?approvedAsPublicId != <undefined> || ?approvedAsPrivateId != <undefined>"
+    ],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    const out = await sparqlTransformer.default(q, options);
+    res.status(200).json(out);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
 
 router.post("/api/approveQuestionVersion", async (req, res) => {
   const author = req.body.token; //TODO previest
@@ -391,7 +418,6 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     res.send("Error!");
   }
 });
-
 router.post("/api/createQuestionAssignment", async (req, res) => {
   let questionAssignmentId;
   if (req.body.id) {
@@ -462,7 +488,83 @@ router.post("/api/createQuestionAssignment", async (req, res) => {
         res.status(500).json(err);
       });
   } else {
-    res.status(500).json("not authorized");
+    res.status(401).json("not authorized");
+  }
+});
+
+router.post("/api/createQuizAssignment", async (req, res) => {
+  console.log(req.body);
+  let quizAssignmentId;
+  if (req.body.id) {
+    quizAssignmentId = decodeURIComponent(req.body.id);
+  }
+  const startDate = req.body.startDate;
+  const endDate = req.body.endDate;
+  const description = req.body.description;
+  const selectedAgents = req.body.selectedAgents;
+  const token = req.body.token;
+  const questions = req.body.questions;
+
+  if (isTeacher(token)) {
+    let oldData;
+    if (quizAssignmentId) {
+      // oldData = await getQuizAssignment(quizAssignmentId);
+    }
+    const quizAssignmentNode = await createQuizAssignment(
+      startDate,
+      endDate,
+      description,
+      questions,
+      quizAssignmentId,
+      oldData
+    );
+    if (quizAssignmentId && oldData) {
+      const oldToRemove = oldData.selectedAgents.filter(
+        id => !selectedAgents.includes(id)
+      );
+      const newToAdd = selectedAgents.filter(
+        id => !oldData.selectedAgents.includes(id)
+      );
+      await Promise.all(
+        oldToRemove.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            quizAssignmentNode,
+            selectedAgent,
+            false
+          );
+        })
+      );
+      await Promise.all(
+        newToAdd.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            quizAssignmentNode,
+            selectedAgent,
+            true
+          );
+        })
+      );
+    } else {
+      await Promise.all(
+        selectedAgents.map(async selectedAgent => {
+          await modifyAssignmentToPerson(
+            quizAssignmentNode,
+            selectedAgent,
+            true
+          );
+        })
+      );
+    }
+    localClient
+      .store(true)
+      .then(result => {
+        res.status(200).json(result);
+      })
+      .catch(err => {
+        console.log(err);
+        res.status(500).json(err);
+      });
+  } else {
+    res.status(401).json("not authorized");
   }
 });
 
@@ -474,20 +576,20 @@ router.post("/api/createNewQuestion", async (req, res) => {
   const questionType = req.body.questionType;
   const answers = req.body.answers;
   const questionId = req.body.questionId;
-  console.log("req.body.questionId");
-  console.log(req.body.questionId);
 
   let questionNode;
   let oldData;
-  const authorizationData = await getAuthorizationData(topic, author, questionId);
+  const authorizationData = await getAuthorizationData(
+    topic,
+    author,
+    questionId
+  );
   console.log(authorizationData);
-  if (isAuthorizedForAddingQuestion(authorizationData)) {
-  //skontrolovat ci sedi: assignment k cloveku, ci je v casovom limite
+  if (isAuthorizedForAddingQuestion(authorizationData, author)) {
+    //skontrolovat ci sedi: assignment k cloveku, ci je v casovom limite
     if (questionId === undefined) {
-      console.log("questionId === undefined");
       questionNode = await createQuestion(author, questionText, topic);
     } else {
-      console.log("isAuthorizedForCreatingQuestionVersion == true");
       //skontrolovat otazka k cloveku
       questionNode = new Node(questionId);
       oldData = await getLastSeen(questionId);
@@ -513,10 +615,10 @@ router.post("/api/createNewQuestion", async (req, res) => {
         console.log(err);
         res.status(500).json(err);
       });
-    } else {
-      console.log("unauthorized")
-      res.status(401).json("Unauthorized");
-    }
+  } else {
+    console.log("unauthorized");
+    res.status(401).json("Unauthorized");
+  }
 });
 
 const createTopic = async topicName => {
@@ -528,7 +630,13 @@ const createTopic = async topicName => {
   localStoreAdd(new Triple(questionNode, "foaf:name", new Text(topicName)));
   return questionNode;
 };
-const addComment = async (questionVersionId, author, newComment, questionId, oldData) => {
+const addComment = async (
+  questionVersionId,
+  author,
+  newComment,
+  questionId,
+  oldData
+) => {
   const commentNode = await getNewNode("Comment");
   if (commentNode) {
     try {
@@ -568,6 +676,109 @@ const addComment = async (questionVersionId, author, newComment, questionId, old
   }
   return;
 };
+
+const createQuizAssignment = async (
+  startDate,
+  endDate,
+  description,
+  questions,
+  quizAssignmentId,
+  dataOld
+) => {
+  let quizAssignmentNode = {};
+  try {
+    if (quizAssignmentId && dataOld) {
+      // quizAssignmentNode = new Node(id);
+      // let startDateTriple = new Triple(
+      //   quizAssignmentNode,
+      //   "foaf:startDate",
+      //   new Data(new Date(dataOld.startDate).toISOString(), "xsd:dateTime")
+      // );
+      // startDateTriple.updateObject(
+      //   new Data(new Date(startDate).toISOString(), "xsd:dateTime")
+      // );
+      // const endDateTriple = new Triple(
+      //   quizAssignmentNode,
+      //   "foaf:endDate",
+      //   new Data(new Date(dataOld.endDate).toISOString(), "xsd:dateTime")
+      // );
+      // endDateTriple.updateObject(
+      //   new Data(new Date(endDate).toISOString(), "xsd:dateTime")
+      // );
+      // const descriptionTriple = new Triple(
+      //   quizAssignmentNode,
+      //   "foaf:description",
+      //   new Text(dataOld.description)
+      // );
+      // descriptionTriple.updateObject(new Text(description));
+      // //TODO pomenit quiz (pomenit selected question)
+      // localClient
+      //   .getLocalStore()
+      //   .bulk([
+      //     startDateTriple,
+      //     endDateTriple,
+      //     descriptionTriple
+      //   ]);
+    } else {
+      quizAssignmentNode = await getNewNode("QuizAssignment");
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "rdf:type",
+          new Node(semanticWebW + "QuizAssignment")
+        )
+      );
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "foaf:startDate",
+          new Data(new Date(startDate).toISOString(), "xsd:dateTime")
+        )
+      );
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "foaf:endDate",
+          new Data(new Date(endDate).toISOString(), "xsd:dateTime")
+        )
+      );
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "foaf:description",
+          new Text(description)
+        )
+      );
+      const quizNode = await createQuiz(questions, quizAssignmentId, dataOld);
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "foaf:quiz",
+          quizNode
+        )
+      );
+    }
+  } catch (e) {
+    console.log(e);
+  }
+  return quizAssignmentNode;
+};
+
+const createQuiz = async (questions, quizAssignmentId, dataOld) => {
+  let quizNode = {};
+  if (quizAssignmentId && dataOld) {
+    //TODO edit quiz
+    console.log("TODO editQuiz!!!");
+  } else {
+    quizNode = await getNewNode("Quiz");
+    await Promise.all(
+      questions.map(async (selectedQuestion, index) => {
+        await addSelectedQuestion(quizNode, selectedQuestion, index);
+      })
+    )
+  }
+  return quizNode;
+};
 const createQuestionAssignment = async (
   startDate,
   endDate,
@@ -579,8 +790,6 @@ const createQuestionAssignment = async (
   let questionAssignmentNode = {};
   try {
     if (id && dataOld) {
-      console.log("dataOld.startDate");
-      console.log(dataOld.startDate);
       questionAssignmentNode = new Node(id);
       let startDateTriple = new Triple(
         questionAssignmentNode,
@@ -870,6 +1079,14 @@ const isTeacher = token => {
   return token === semanticWebW + "Teacher";
 };
 
+async function addSelectedQuestion(quizNode, selectedQuestion, index) {
+  let selectedQuestionNode = {};
+  selectedQuestionNode = await getNewNode("SelectedQuestion");
+  localStoreAdd(new Triple(quizNode, "foaf:selectedQuestionInfo", selectedQuestionNode));
+  localStoreAdd(new Triple(selectedQuestionNode, "foaf:selectedQuestion", new Node(selectedQuestion)));
+  localStoreAdd(new Triple(selectedQuestionNode, "foaf:position", new Data(index, "xsd:integer")));
+}
+
 async function getQuestionAssignment(questionAssignmentUri) {
   const q = {
     proto: {
@@ -927,14 +1144,14 @@ async function getLastSeen(questionId) {
   }
 }
 
-const getAuthorizationData = async(topicId, author, questionId) => {
+const getAuthorizationData = async (topicId, author, questionId) => {
   const q = {
     proto: {
       id: "<" + topicId + ">",
       questionAssignment: {
         id: "$foaf:hasAssignment",
         startDate: "$foaf:startDate",
-        endDate: "$foaf:endDate",
+        endDate: "$foaf:endDate"
       },
       question: {
         id: "$foaf:questionsAboutMe"
@@ -942,49 +1159,59 @@ const getAuthorizationData = async(topicId, author, questionId) => {
     },
     $where: [
       "<" + topicId + ">" + " a foaf:Topic",
-      "<" + topicId + ">" +" foaf:hasAssignment ?assignmentId",
-      "?assignmentId foaf:assignedTo " + "<" + author + ">",
+      "<" + topicId + ">" + " foaf:hasAssignment ?assignmentId",
+      !isTeacher(author)
+        ? "?assignmentId foaf:assignedTo " + "<" + author + ">"
+        : "",
       "?assignmentId foaf:startDate ?startDate",
-	    "?assignmentId foaf:endDate ?endDate",
-      questionId ? "<" + topicId + ">" + " foaf:questionsAboutMe " + "<" + questionId + ">" : "",
-      questionId ? "<" + questionId + ">" + " foaf:author " + "<" + author + ">" : "",
-    ],
-    $filter: [
-      "?startDate <= NOW()",
-      "?endDate >= NOW()",
+      "?assignmentId foaf:endDate ?endDate",
+      questionId
+        ? "<" +
+          topicId +
+          ">" +
+          " foaf:questionsAboutMe " +
+          "<" +
+          questionId +
+          ">"
+        : "",
+      !isTeacher(author)
+        ? questionId
+          ? "<" + questionId + ">" + " foaf:author " + "<" + author + ">"
+          : ""
+        : ""
     ],
     $prefixes: {
       foaf: semanticWebW
     }
   };
+  !isTeacher(author)
+    ? (q["$filter"] = ["?startDate <= NOW()", "?endDate >= NOW()"])
+    : null;
   try {
     let data = await sparqlTransformer.default(q, options);
-    console.log("data");
-    console.log(data);
     return data[0];
   } catch (e) {
     console.log(e);
     return undefined;
   }
-}
-const isAuthorizedForAddingQuestion = (authorizationData) => {
-  console.log("isAuthorizedForAddingQuestion");
-  if (
-    authorizationData &&
-    authorizationData.questionAssignment &&
-    new Date(authorizationData.questionAssignment.startDate) < new Date() &&
-    new Date(authorizationData.questionAssignment.endDate) > new Date()
-  ) {
-    console.log(true);
-    return true;
+};
+const isAuthorizedForAddingQuestion = (authorizationData, author) => {
+  if (authorizationData && authorizationData.questionAssignment) {
+    if (
+      (new Date(authorizationData.questionAssignment.startDate) < new Date() &&
+        new Date(authorizationData.questionAssignment.endDate) > new Date()) ||
+      isTeacher(author)
+    ) {
+      console.log(true);
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    console.log(false);
+    return false;
   }
-  console.log(false);
-  return false;
-}
-
-const isAuthorizedForCreatingQuestionVersion = (authorizationData) => {
-  return false;
-}
+};
 
 function localStoreAdd(triple) {
   localClient.getLocalStore().add(triple);
