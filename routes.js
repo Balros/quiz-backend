@@ -82,6 +82,61 @@ router.post("/api/questionGroups", async (req, res) => {
   }
 });
 
+router.post("/api/quizAssignments", async (req, res) => {
+  const requester = req.body.token; //TODO
+
+  //TODO return only questions where i am author and show all to teacher
+  const q = {
+    proto: {
+      id: "?id",
+      title: "$rdfs:label",
+      description: "$foaf:description",
+      startTime: "$foaf:startDate",
+      endTime: "$foaf:endDate",
+      quiz: {
+        id: "$foaf:quiz",
+        questions: {
+          id: "$foaf:selectedQuestionInfo",
+          selectedQuestion: {
+            id: "$foaf:selectedQuestion",
+            title: "$rdfs:label"
+          }
+        }
+      },
+    },
+    $where: [
+      "?id a foaf:QuizAssignment",
+      !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
+      !isTeacher(requester)
+        ? "?assignmentId foaf:assignedTo <" + requester + ">"
+        : ""
+      // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
+      // !isTeacher(requester)
+      //   ? "OPTIONAL{?questionId foaf:author <" + requester + ">}"
+      //   : "",
+    ],
+    // $filter: !isTeacher(requester) ?
+    // "(EXISTS{?id foaf:questionsAboutMe ?v3r} && ?v31 = <" + requester + ">) || NOT EXISTS{?id foaf:questionsAboutMe ?v3r}"
+    // : "",
+    //?v31 is author
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    data = toArray(data);
+    data.forEach(assignment => {
+      assignment.questions = toArray(assignment.questions);
+    });
+    res.status(200).json(data);
+  } catch (e) {
+    console.log(e);
+    res.send("Error!");
+  }
+});
+
 router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
   const editedQuestionAssignment = decodeURIComponent(
     req.body.editedQuestionAssignment
@@ -498,6 +553,7 @@ router.post("/api/createQuizAssignment", async (req, res) => {
   if (req.body.id) {
     quizAssignmentId = decodeURIComponent(req.body.id);
   }
+  const title = req.body.title;
   const startDate = req.body.startDate;
   const endDate = req.body.endDate;
   const description = req.body.description;
@@ -511,6 +567,7 @@ router.post("/api/createQuizAssignment", async (req, res) => {
       // oldData = await getQuizAssignment(quizAssignmentId);
     }
     const quizAssignmentNode = await createQuizAssignment(
+      title,
       startDate,
       endDate,
       description,
@@ -571,6 +628,7 @@ router.post("/api/createQuizAssignment", async (req, res) => {
 router.post("/api/createNewQuestion", async (req, res) => {
   const author = req.body.token;
   //TODO previest token na authora
+  const title = req.body.title;
   const questionText = req.body.questionText;
   const topic = req.body.topic;
   const questionType = req.body.questionType;
@@ -584,15 +642,21 @@ router.post("/api/createNewQuestion", async (req, res) => {
     author,
     questionId
   );
-  console.log(authorizationData);
   if (isAuthorizedForAddingQuestion(authorizationData, author)) {
-    //skontrolovat ci sedi: assignment k cloveku, ci je v casovom limite
     if (questionId === undefined) {
-      questionNode = await createQuestion(author, questionText, topic);
+      questionNode = await createQuestion(author, topic, title);
     } else {
-      //skontrolovat otazka k cloveku
       questionNode = new Node(questionId);
       oldData = await getLastSeen(questionId);
+      let labelTriple = new Triple(
+        questionNode,
+        "rdfs:label",
+        new Text(oldData[0].title)
+      );
+      labelTriple.updateObject(
+        new Text(title)
+      );
+      localClient.getLocalStore().bulk([labelTriple]);
     }
     const questionVersionNode = await createQuestionVersion(
       author,
@@ -601,6 +665,7 @@ router.post("/api/createNewQuestion", async (req, res) => {
       questionNode,
       questionId ? oldData : null
     );
+    
     await Promise.all(
       answers.map(async (answer, index) => {
         await createPredefinedAnswer(questionVersionNode, answer, index);
@@ -678,6 +743,7 @@ const addComment = async (
 };
 
 const createQuizAssignment = async (
+  title,
   startDate,
   endDate,
   description,
@@ -689,6 +755,7 @@ const createQuizAssignment = async (
   try {
     if (quizAssignmentId && dataOld) {
       // quizAssignmentNode = new Node(id);
+      //tiez title
       // let startDateTriple = new Triple(
       //   quizAssignmentNode,
       //   "foaf:startDate",
@@ -726,6 +793,13 @@ const createQuizAssignment = async (
           quizAssignmentNode,
           "rdf:type",
           new Node(semanticWebW + "QuizAssignment")
+        )
+      );
+      localStoreAdd(
+        new Triple(
+          quizAssignmentNode,
+          "rdfs:label",
+          new Text(title)
         )
       );
       localStoreAdd(
@@ -889,7 +963,7 @@ const createQuestionAssignment = async (
   return questionAssignmentNode;
 };
 
-const createQuestion = async (author, questionText, topic) => {
+const createQuestion = async (author, topic, title) => {
   let questionNode = await getNewNode("Question");
   try {
     localStoreAdd(
@@ -897,7 +971,7 @@ const createQuestion = async (author, questionText, topic) => {
     );
     localStoreAdd(new Triple(questionNode, "foaf:author", new Node(author)));
     localStoreAdd(
-      new Triple(questionNode, "rdfs:label", new Text(questionText))
+      new Triple(questionNode, "rdfs:label", new Text(title))
     );
     localStoreAdd(new Triple(questionNode, "foaf:about", new Node(topic)));
     localStoreAdd(
@@ -941,6 +1015,7 @@ const createQuestionVersion = async (
       new Triple(questionNode, "foaf:version", questionVersionNode)
     );
     if (oldData) {
+      
       let lastChange = new Triple(
         questionNode,
         "foaf:lastChange",
@@ -1128,7 +1203,8 @@ async function getLastSeen(questionId) {
       id: "<" + questionId + ">",
       lastSeenByStudent: "$foaf:lastSeenByStudent",
       lastSeenByTeacher: "$foaf:lastSeenByTeacher",
-      lastChange: "$foaf:lastChange"
+      lastChange: "$foaf:lastChange",
+      title: "$rdfs:label"
     },
     $where: ["<" + questionId + ">" + " a foaf:Question"],
     $prefixes: {
