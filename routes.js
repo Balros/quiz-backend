@@ -368,6 +368,16 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   }
 });
 
+router.get("/api/getQuizAssignment/:uri", async (req, res) => {
+  const quizAssignmentUri = decodeURIComponent(req.params.uri);
+  const data = await getQuizAssignment(quizAssignmentUri);
+  if (data !== "undefined") {
+    res.status(200).json(data);
+  } else {
+    res.send("Error!");
+  }
+});
+
 router.get("/api/questionTypes", async (req, res) => {
   const q = {
     proto: {
@@ -548,7 +558,6 @@ router.post("/api/createQuestionAssignment", async (req, res) => {
 });
 
 router.post("/api/createQuizAssignment", async (req, res) => {
-  console.log(req.body);
   let quizAssignmentId;
   if (req.body.id) {
     quizAssignmentId = decodeURIComponent(req.body.id);
@@ -1189,6 +1198,53 @@ async function getQuestionAssignment(questionAssignmentUri) {
       return selectedAgent.id;
     });
     item.selectedAgents = Array.from(selectedAgentsTmp);
+    data = item;
+    return data;
+  } catch (e) {
+    console.log(e);
+    return "undefined";
+  }
+}
+
+async function getQuizAssignment(quizAssignmentUri) {
+  const q = {
+    proto: {
+      id: "<" + quizAssignmentUri + ">",
+      title: "$rdfs:label",
+      startDate: "$foaf:startDate",
+      endDate: "$foaf:endDate",
+      description: "$foaf:description",
+      selectedAgents: {
+        id: "$foaf:assignedTo"
+      },
+      quiz: {
+        id: "$foaf:quiz",
+        questions: {
+          id: "$foaf:selectedQuestionInfo",
+          selectedQuestion: {
+            id: "$foaf:selectedQuestion",
+          }
+        }
+      },
+    },
+    $where: [
+      "<" + quizAssignmentUri + ">" + " rdf:type foaf:QuizAssignment"
+    ],
+    // $orderby: ["DESC(?v82)", "?v852", "?v843"]
+    //ORDERBY position
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    const item = data[0];
+    item.selectedAgents = toArray(item.selectedAgents);
+    const selectedAgentsTmp = item.selectedAgents.map(selectedAgent => {
+      return selectedAgent.id;
+    });
+    item.selectedAgents = Array.from(selectedAgentsTmp);
+    //TODO quiz->questions->selectedQuestions to item.question on front-end
     data = item;
     return data;
   } catch (e) {
