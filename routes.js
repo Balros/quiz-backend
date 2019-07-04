@@ -78,7 +78,7 @@ router.post("/api/questionGroups", async (req, res) => {
     res.status(200).json(data);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -133,7 +133,7 @@ router.post("/api/quizAssignments", async (req, res) => {
     res.status(200).json(data);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -166,7 +166,7 @@ router.post("/api/topicsToCreateModifyQuestionAssignment", async (req, res) => {
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -207,7 +207,7 @@ router.post("/api/topics", async (req, res) => {
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -247,7 +247,7 @@ router.get("/api/getAgents", async (req, res) => {
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.send(e);
   }
 });
 router.get("/api/getQuestions", async (req, res) => {
@@ -274,7 +274,7 @@ router.get("/api/getQuestions", async (req, res) => {
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -342,7 +342,7 @@ router.post("/api/approveQuestionVersion", async (req, res) => {
         ]);
     } catch (e) {
       console.log(e);
-      res.send("Error!");
+      res.status(500).send(e);
     }
     localClient
       .store(true)
@@ -364,7 +364,7 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   if (data !== "undefined") {
     res.status(200).json(data);
   } else {
-    res.send("Error!");
+    res.status(500).json();
   }
 });
 
@@ -374,7 +374,7 @@ router.get("/api/getQuizAssignment/:uri", async (req, res) => {
   if (data !== "undefined") {
     res.status(200).json(data);
   } else {
-    res.send("Error!");
+    res.status(500).json("data undefined");
   }
 });
 
@@ -394,7 +394,7 @@ router.get("/api/questionTypes", async (req, res) => {
     res.status(200).json(out);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 
@@ -480,7 +480,7 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     res.status(200).json(data[0]);
   } catch (e) {
     console.log(e);
-    res.send("Error!");
+    res.status(500).json(e);
   }
 });
 router.post("/api/createQuestionAssignment", async (req, res) => {
