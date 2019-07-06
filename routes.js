@@ -179,7 +179,8 @@ router.post("/api/topics", async (req, res) => {
     },
     $where: [
       "?id rdf:type foaf:Topic",
-      "?id foaf:hasAssignment ?questionAssignmentId",
+      !isTeacher(author) ? "?id foaf:hasAssignment ?questionAssignmentId"
+      : "",
       !isTeacher(author)
         ? "?questionAssignmentId foaf:assignedTo " + "<" + author + ">"
         : "",
@@ -573,7 +574,7 @@ router.post("/api/createQuizAssignment", async (req, res) => {
   if (isTeacher(token)) {
     let oldData;
     if (quizAssignmentId) {
-      // oldData = await getQuizAssignment(quizAssignmentId);
+      oldData = await getQuizAssignment(quizAssignmentId);
     }
     const quizAssignmentNode = await createQuizAssignment(
       title,
@@ -763,38 +764,46 @@ const createQuizAssignment = async (
   let quizAssignmentNode = {};
   try {
     if (quizAssignmentId && dataOld) {
-      // quizAssignmentNode = new Node(id);
-      //tiez title
-      // let startDateTriple = new Triple(
-      //   quizAssignmentNode,
-      //   "foaf:startDate",
-      //   new Data(new Date(dataOld.startDate).toISOString(), "xsd:dateTime")
-      // );
-      // startDateTriple.updateObject(
-      //   new Data(new Date(startDate).toISOString(), "xsd:dateTime")
-      // );
-      // const endDateTriple = new Triple(
-      //   quizAssignmentNode,
-      //   "foaf:endDate",
-      //   new Data(new Date(dataOld.endDate).toISOString(), "xsd:dateTime")
-      // );
-      // endDateTriple.updateObject(
-      //   new Data(new Date(endDate).toISOString(), "xsd:dateTime")
-      // );
-      // const descriptionTriple = new Triple(
-      //   quizAssignmentNode,
-      //   "foaf:description",
-      //   new Text(dataOld.description)
-      // );
-      // descriptionTriple.updateObject(new Text(description));
-      // //TODO pomenit quiz (pomenit selected question)
-      // localClient
-      //   .getLocalStore()
-      //   .bulk([
-      //     startDateTriple,
-      //     endDateTriple,
-      //     descriptionTriple
-      //   ]);
+      quizAssignmentNode = new Node(quizAssignmentId);
+      let labelTriple = new Triple(
+        quizAssignmentNode,
+        "rdfs:label",
+        new Text(dataOld.title)
+      );
+      labelTriple.updateObject(
+        new Text(title)
+      );
+      let startDateTriple = new Triple(
+        quizAssignmentNode,
+        "foaf:startDate",
+        new Data(new Date(dataOld.startDate).toISOString(), "xsd:dateTime")
+      );
+      startDateTriple.updateObject(
+        new Data(new Date(startDate).toISOString(), "xsd:dateTime")
+      );
+      const endDateTriple = new Triple(
+        quizAssignmentNode,
+        "foaf:endDate",
+        new Data(new Date(dataOld.endDate).toISOString(), "xsd:dateTime")
+      );
+      endDateTriple.updateObject(
+        new Data(new Date(endDate).toISOString(), "xsd:dateTime")
+      );
+      const descriptionTriple = new Triple(
+        quizAssignmentNode,
+        "foaf:description",
+        new Text(dataOld.description)
+      );
+      descriptionTriple.updateObject(new Text(description));
+      await createQuiz(questions, dataOld.quiz);
+      localClient
+        .getLocalStore()
+        .bulk([
+          labelTriple,
+          startDateTriple,
+          endDateTriple,
+          descriptionTriple
+        ]);
     } else {
       quizAssignmentNode = await getNewNode("QuizAssignment");
       localStoreAdd(
@@ -832,7 +841,7 @@ const createQuizAssignment = async (
           new Text(description)
         )
       );
-      const quizNode = await createQuiz(questions, quizAssignmentId, dataOld);
+      const quizNode = await createQuiz(questions, dataOld);
       localStoreAdd(
         new Triple(
           quizAssignmentNode,
@@ -847,19 +856,26 @@ const createQuizAssignment = async (
   return quizAssignmentNode;
 };
 
-const createQuiz = async (questions, quizAssignmentId, dataOld) => {
+const createQuiz = async (questions, quizOld) => {
   let quizNode = {};
-  if (quizAssignmentId && dataOld) {
-    //TODO edit quiz
-    console.log("TODO editQuiz!!!");
+  if (quizOld) {
+    quizNode = new Node(quizOld.id);
+    if (quizOld.questions){
+      await Promise.all(
+        quizOld.questions.map(async (oldSelectedQuestion) => {
+          console.log(oldSelectedQuestion);
+          await removeSelectedQuestion(quizNode, oldSelectedQuestion);
+        })
+      )
+    }
   } else {
     quizNode = await getNewNode("Quiz");
-    await Promise.all(
-      questions.map(async (selectedQuestion, index) => {
-        await addSelectedQuestion(quizNode, selectedQuestion, index);
-      })
-    )
   }
+  await Promise.all(
+    questions.map(async (selectedQuestion, index) => {
+      await addSelectedQuestion(quizNode, selectedQuestion, index);
+    })
+  )
   return quizNode;
 };
 const createQuestionAssignment = async (
@@ -1165,10 +1181,40 @@ const isTeacher = token => {
 
 async function addSelectedQuestion(quizNode, selectedQuestion, index) {
   let selectedQuestionNode = {};
-  selectedQuestionNode = await getNewNode("SelectedQuestion");
+  
+    selectedQuestionNode = await getNewNode("SelectedQuestion");
   localStoreAdd(new Triple(quizNode, "foaf:selectedQuestionInfo", selectedQuestionNode));
   localStoreAdd(new Triple(selectedQuestionNode, "foaf:selectedQuestion", new Node(selectedQuestion)));
   localStoreAdd(new Triple(selectedQuestionNode, "foaf:position", new Data(index, "xsd:integer")));
+}
+
+async function removeSelectedQuestion(quizNode, oldSelectedQuestion) {
+  if (oldSelectedQuestion) {
+    localStoreAdd(
+      new Triple(
+        quizNode,
+        "foaf:selectedQuestionInfo",
+        new Node(oldSelectedQuestion.id),
+        Triple.REMOVE
+      )
+    );
+    localStoreAdd(
+      new Triple(
+        new Node(oldSelectedQuestion.id),
+        "foaf:selectedQuestion",
+        new Node(oldSelectedQuestion.selectedQuestion.id),
+        Triple.REMOVE
+      )
+    );
+    localStoreAdd(
+      new Triple(
+        new Node(oldSelectedQuestion.id),
+        "foaf:position",
+        new Data(oldSelectedQuestion.position, "xsd:integer"),
+        Triple.REMOVE
+      )
+    );
+  }
 }
 
 async function getQuestionAssignment(questionAssignmentUri) {
@@ -1221,6 +1267,7 @@ async function getQuizAssignment(quizAssignmentUri) {
         id: "$foaf:quiz",
         questions: {
           id: "$foaf:selectedQuestionInfo",
+          position: "$foaf:position",
           selectedQuestion: {
             id: "$foaf:selectedQuestion",
           }
@@ -1244,7 +1291,7 @@ async function getQuizAssignment(quizAssignmentUri) {
       return selectedAgent.id;
     });
     item.selectedAgents = Array.from(selectedAgentsTmp);
-    //TODO quiz->questions->selectedQuestions to item.question on front-end
+    item.quiz.questions = toArray(item.quiz.questions);
     data = item;
     return data;
   } catch (e) {
