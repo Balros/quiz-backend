@@ -363,6 +363,12 @@ router.get("/api/getQuestionAssignment/:uri", async (req, res) => {
   const questionAssignmentUri = decodeURIComponent(req.params.uri);
   const data = await getQuestionAssignment(questionAssignmentUri);
   if (data !== "undefined") {
+    res.set({
+      'Access-Control-Allow-Credentials' : true,
+      'Access-Control-Allow-Origin':'*',
+      'Access-Control-Allow-Methods':'GET',
+      'Access-Control-Allow-Headers':'application/json',
+    });
     res.status(200).json(data);
   } else {
     res.status(500).json();
