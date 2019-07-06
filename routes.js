@@ -373,6 +373,7 @@ router.get("/api/getQuizAssignment/:uri", async (req, res) => {
   const quizAssignmentUri = decodeURIComponent(req.params.uri);
   const data = await getQuizAssignment(quizAssignmentUri);
   if (data !== "undefined") {
+    res.set('Content-Type', 'application/json');
     res.status(200).json(data);
   } else {
     res.status(500).json("data undefined");
@@ -1293,6 +1294,7 @@ async function getQuizAssignment(quizAssignmentUri) {
     item.selectedAgents = Array.from(selectedAgentsTmp);
     item.quiz.questions = toArray(item.quiz.questions);
     data = item;
+    console.log(data);
     return data;
   } catch (e) {
     console.log(e);
