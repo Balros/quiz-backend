@@ -373,7 +373,12 @@ router.get("/api/getQuizAssignment/:uri", async (req, res) => {
   const quizAssignmentUri = decodeURIComponent(req.params.uri);
   const data = await getQuizAssignment(quizAssignmentUri);
   if (data !== "undefined") {
-    res.set('Content-Type', 'application/json');
+    res.set({
+      'Access-Control-Allow-Credentials' : true,
+      'Access-Control-Allow-Origin':'*',
+      'Access-Control-Allow-Methods':'GET',
+      'Access-Control-Allow-Headers':'application/json',
+    });
     res.status(200).json(data);
   } else {
     res.status(500).json("data undefined");
