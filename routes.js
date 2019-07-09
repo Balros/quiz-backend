@@ -106,9 +106,8 @@ router.post("/api/quizAssignments", async (req, res) => {
     },
     $where: [
       "?id a foaf:QuizAssignment",
-      !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
       !isTeacher(requester)
-        ? "?assignmentId foaf:assignedTo <" + requester + ">"
+        ? "?id foaf:assignedTo <" + requester + ">"
         : ""
       // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
       // !isTeacher(requester)
@@ -411,6 +410,31 @@ router.get("/api/questionTypes", async (req, res) => {
   }
 });
 
+router.get("/api/getQuizTake/:id", async (req, res) => {
+  const user = req.headers.token
+  const quizAssignmentId = decodeURIComponent(req.params.id);
+  let data = await getQuizTake(quizAssignmentId, user);
+  res.set({
+    'Access-Control-Allow-Credentials' : true,
+    'Access-Control-Allow-Origin':'*',
+    'Access-Control-Allow-Methods':'GET',
+    'Access-Control-Allow-Headers':'application/json',
+  });
+  if (Array.isArray(data) && data.length) {
+    console.log("data mam");
+    res.status(200).json(data[0]);
+  } else {
+    await getDataAndCreateQuizTake(quizAssignmentId, user, res);
+    console.log("data nemam");
+    localClient
+      .store(true)
+      .then(async (result) => {
+        data = await getQuizTake(quizAssignmentId, user);
+        res.status(200).json(data[0]);
+    })
+  }
+});
+
 router.post("/api/createTopic", async (req, res) => {
   const topicName = req.body.topicName;
 
@@ -703,7 +727,6 @@ router.post("/api/createNewQuestion", async (req, res) => {
         res.status(500).json(err);
       });
   } else {
-    console.log("unauthorized");
     res.status(401).json("Unauthorized");
   }
 });
@@ -875,7 +898,6 @@ const createQuiz = async (questions, quizOld) => {
     if (quizOld.questions){
       await Promise.all(
         quizOld.questions.map(async (oldSelectedQuestion) => {
-          console.log(oldSelectedQuestion);
           await removeSelectedQuestion(quizNode, oldSelectedQuestion);
         })
       )
@@ -885,11 +907,34 @@ const createQuiz = async (questions, quizOld) => {
   }
   await Promise.all(
     questions.map(async (selectedQuestion, index) => {
-      await addSelectedQuestion(quizNode, selectedQuestion, index);
+      const selectedQuestionNode = await addSelectedQuestion(selectedQuestion, index);
+      localStoreAdd(new Triple(quizNode, "foaf:selectedQuestionInfo", selectedQuestionNode));
     })
   )
   return quizNode;
 };
+
+const createQuizTake = async (questionsVersionsIds, author) => {
+  let quizTakeNode = await getNewNode("QuizTake");
+  try {
+    localStoreAdd(
+      new Triple(quizTakeNode, "rdf:type", new Node(semanticWebW + "QuizTake"))
+    );
+    localStoreAdd(new Triple(quizTakeNode, "foaf:author", new Node(author)));
+    await Promise.all(
+      questionsVersionsIds.map(async (questionVersionId, index) => {
+        let orderedQuestionNode = await createOrderedQuestion(questionVersionId, index);
+        localStoreAdd(
+          new Triple(quizTakeNode, "foaf:orderedQuestion", orderedQuestionNode)
+        );
+      })
+    );
+  } catch (e) {
+    console.log(e);
+  }
+  return quizTakeNode;
+};
+
 const createQuestionAssignment = async (
   startDate,
   endDate,
@@ -1191,13 +1236,71 @@ const isTeacher = token => {
   return token === semanticWebW + "Teacher";
 };
 
-async function addSelectedQuestion(quizNode, selectedQuestion, index) {
-  let selectedQuestionNode = {};
-  
-    selectedQuestionNode = await getNewNode("SelectedQuestion");
-  localStoreAdd(new Triple(quizNode, "foaf:selectedQuestionInfo", selectedQuestionNode));
+async function getDataAndCreateQuizTake(quizAssignmentId, user, res) {
+  const q = {
+    proto: {
+      id: "<" + quizAssignmentId + ">",
+      quiz: {
+        id: "$foaf:quiz",
+        selectedQuestionsInfo: {
+          id: "$foaf:selectedQuestionInfo",
+          position: "$foaf:position",
+          selectedQuestion: {
+            id: "$foaf:selectedQuestion",
+            public: {
+              id: "$foaf:approvedAsPublic"
+            },
+            private: {
+              id: "$foaf:approvedAsPrivate"
+            }
+          }
+        }
+      }
+    },
+    $where: [
+      "<" + quizAssignmentId + "> a foaf:QuizAssignment",
+      !isTeacher(user) ? "<" + quizAssignmentId + "> foaf:assignedTo <" + user + ">" : ""
+    ],
+    $orderby: ["?v111"],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    const out = await sparqlTransformer.default(q, options);
+    const selectedQuestionsInfo = out[0].quiz.selectedQuestionsInfo;
+    const questionsVersionsIds = [];
+    selectedQuestionsInfo.forEach(selectedQuestionInfo => {
+      if (selectedQuestionInfo.selectedQuestion.private.id !== 'undefined') {
+        questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.private.id);
+      }
+      else if (selectedQuestionInfo.selectedQuestion.public.id !== 'undefined') {
+        questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.public.id);
+      }
+    });
+    const quizTakeNode = await createQuizTake(questionsVersionsIds, user);
+    localStoreAdd(new Triple(new Node(quizAssignmentId), "foaf:quizTake", quizTakeNode));
+    return;
+  }
+  catch (e) {
+    console.log(e);
+    res.status(500).json(e);
+  }
+}
+
+async function createOrderedQuestion(questionVersionId, index) {
+  const orderedQuestionNode = await getNewNode("OrderedQuestion");
+  localStoreAdd(new Triple(orderedQuestionNode, "rdf:type", new Node(semanticWebW + "OrderedQuestion")));
+  localStoreAdd(new Triple(orderedQuestionNode, "foaf:orderedQuestionVersion", new Node(questionVersionId)));
+  localStoreAdd(new Triple(orderedQuestionNode, "foaf:position", new Data(index, "xsd:integer")));
+  return orderedQuestionNode;
+}
+
+async function addSelectedQuestion(selectedQuestion, index) {
+  const selectedQuestionNode = await getNewNode("SelectedQuestion");
   localStoreAdd(new Triple(selectedQuestionNode, "foaf:selectedQuestion", new Node(selectedQuestion)));
   localStoreAdd(new Triple(selectedQuestionNode, "foaf:position", new Data(index, "xsd:integer")));
+  return selectedQuestionNode;
 }
 
 async function removeSelectedQuestion(quizNode, oldSelectedQuestion) {
@@ -1209,7 +1312,7 @@ async function removeSelectedQuestion(quizNode, oldSelectedQuestion) {
         new Node(oldSelectedQuestion.id),
         Triple.REMOVE
       )
-    );
+    );//TODO vytiahnut von
     localStoreAdd(
       new Triple(
         new Node(oldSelectedQuestion.id),
@@ -1305,7 +1408,6 @@ async function getQuizAssignment(quizAssignmentUri) {
     item.selectedAgents = Array.from(selectedAgentsTmp);
     item.quiz.questions = toArray(item.quiz.questions);
     data = item;
-    console.log(data);
     return data;
   } catch (e) {
     console.log(e);
@@ -1335,6 +1437,47 @@ async function getLastSeen(questionId) {
     return "undefined";
   }
 }
+
+const getQuizTake = async (quizAssignmentId, authorId) => {
+  const q = {
+    proto: {
+      id: "<" + quizAssignmentId + ">",
+      quizTake: {
+        id: "$foaf:quizTake",
+        author: "$foaf:author",
+        orderedQuestions: {
+          id: "$foaf:orderedQuestion",
+          position: "$foaf:position",
+          questionVersion: {
+            id: "$foaf:orderedQuestionVersion",
+            text: "$foaf:text",
+            answers: {
+              id: "$foaf:answer",
+              text: "$foaf:text",
+              position: "$foaf:position",
+            }
+          }
+        }
+      }
+    },
+    $where: [
+      "<" + quizAssignmentId + "> a foaf:QuizAssignment",
+      "<" + quizAssignmentId + "> foaf:quizTake ?quizTakeId",
+    ],
+    $filter: "?v11 = <" + authorId + ">",
+    $orderby: ["?v121", "?v12222"],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    return data;
+  } catch (e) {
+    console.log(e);
+    return "undefined";
+  }
+} 
 
 const getAuthorizationData = async (topicId, author, questionId) => {
   const q = {
@@ -1394,13 +1537,11 @@ const isAuthorizedForAddingQuestion = (authorizationData, author) => {
         new Date(authorizationData.questionAssignment.endDate) > new Date()) ||
       isTeacher(author)
     ) {
-      console.log(true);
       return true;
     } else {
       return false;
     }
   } else {
-    console.log(false);
     return false;
   }
 };
