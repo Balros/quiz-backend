@@ -231,6 +231,39 @@ router.post("/api/addComment", async (req, res) => {
     });
 });
 
+router.post("/api/submitQuizTake", async (req, res) => {
+  const quizTakeId = req.body.quizTakeId
+  const orderedQuestions = req.body.orderedQuestions;
+  const user = req.body.token;
+  const data = await getQuizTakeById(quizTakeId);
+  if (Array.isArray(data) && data.length) {
+    const quizTake = data[0];
+    if (quizTake.author === user) {
+      orderedQuestions.forEach(orderedQuestion => {
+        const databaseOrderedQuestion = quizTake.orderedQuestions.find(x => x.id === orderedQuestion.id);
+          const databaseQuestionVersion = databaseOrderedQuestion.questionVersion;
+          orderedQuestion.answers.forEach(async answer => {
+            if (databaseQuestionVersion.answers.find(x => x.id === answer.id)) {
+              console.log(answer);
+              const userAnswerNode = await getNewNode("UserAnswer");
+              localStoreAdd(new Triple(userAnswerNode, "foaf:predefinedAnswer", new Node(answer.id)));
+              localStoreAdd(new Triple(userAnswerNode, "foaf:userChoice", answer.correct));
+            }
+          })
+      });
+    }
+  }
+  localClient
+    .store(true)
+    .then(result => {
+      res.status(200).json(result);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).json(err);
+    });
+});
+
 router.get("/api/getAgents", async (req, res) => {
   const q = {
     proto: {
@@ -411,27 +444,25 @@ router.get("/api/questionTypes", async (req, res) => {
 });
 
 router.get("/api/getQuizTake/:id", async (req, res) => {
-  const user = req.headers.token
-  const quizAssignmentId = decodeURIComponent(req.params.id);
-  let data = await getQuizTake(quizAssignmentId, user);
   res.set({
     'Access-Control-Allow-Credentials' : true,
     'Access-Control-Allow-Origin':'*',
     'Access-Control-Allow-Methods':'GET',
     'Access-Control-Allow-Headers':'application/json',
   });
+  const user = req.headers.token;
+  const quizAssignmentId = decodeURIComponent(req.params.id);
+  let data = await getQuizTake(quizAssignmentId, user);
   if (Array.isArray(data) && data.length) {
-    console.log("data mam");
     res.status(200).json(data[0]);
   } else {
-    await getDataAndCreateQuizTake(quizAssignmentId, user, res);
-    console.log("data nemam");
-    localClient
-      .store(true)
-      .then(async (result) => {
-        data = await getQuizTake(quizAssignmentId, user);
-        res.status(200).json(data[0]);
-    })
+    // await getDataAndCreateQuizTake(quizAssignmentId, user, res);
+    // localClient
+    //   .store(true)
+    //   .then(async (result) => {
+    //     data = await getQuizTake(quizAssignmentId, user);
+    //     res.status(200).json(data[0]);
+    // })
   }
 });
 
@@ -1268,19 +1299,23 @@ async function getDataAndCreateQuizTake(quizAssignmentId, user, res) {
   };
   try {
     const out = await sparqlTransformer.default(q, options);
-    const selectedQuestionsInfo = out[0].quiz.selectedQuestionsInfo;
-    const questionsVersionsIds = [];
-    selectedQuestionsInfo.forEach(selectedQuestionInfo => {
-      if (selectedQuestionInfo.selectedQuestion.private.id !== 'undefined') {
-        questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.private.id);
-      }
-      else if (selectedQuestionInfo.selectedQuestion.public.id !== 'undefined') {
-        questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.public.id);
-      }
-    });
-    const quizTakeNode = await createQuizTake(questionsVersionsIds, user);
-    localStoreAdd(new Triple(new Node(quizAssignmentId), "foaf:quizTake", quizTakeNode));
-    return;
+    if (Array.isArray(out) && out.length) {
+      const selectedQuestionsInfo = toArray(out[0].quiz.selectedQuestionsInfo);
+      const questionsVersionsIds = [];
+      selectedQuestionsInfo.forEach(selectedQuestionInfo => {
+        if (selectedQuestionInfo.selectedQuestion.private.id !== 'undefined') {
+          questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.private.id);
+        }
+        else if (selectedQuestionInfo.selectedQuestion.public.id !== 'undefined') {
+          questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.public.id);
+        }
+      });
+
+      const quizTakeNode = await createQuizTake(questionsVersionsIds, user);
+      localStoreAdd(new Triple(new Node(quizAssignmentId), "foaf:quizTake", quizTakeNode));
+      return;
+    }
+    else {res.status(401).json("Unauthorized");}
   }
   catch (e) {
     console.log(e);
@@ -1438,6 +1473,38 @@ async function getLastSeen(questionId) {
   }
 }
 
+const getQuizTakeById = async (quizTakeId) => {
+  const q = {
+    proto: {
+      id: "<" + quizTakeId + ">",
+      author: "$foaf:author",
+      orderedQuestions: {
+        id: "$foaf:orderedQuestion",
+        questionVersion: {
+          id: "$foaf:orderedQuestionVersion",
+          answers: {
+            id: "$foaf:answer",
+          }
+        }
+      }
+    },
+    $where: [
+      "<" + quizTakeId + "> a foaf:QuizTake",
+    ],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    data[0].orderedQuestions = toArray(data[0].orderedQuestions);
+    return data;
+  } catch (e) {
+    console.log(e);
+    return "undefined";
+  }
+}
+
 const getQuizTake = async (quizAssignmentId, authorId) => {
   const q = {
     proto: {
@@ -1472,6 +1539,7 @@ const getQuizTake = async (quizAssignmentId, authorId) => {
   };
   try {
     let data = await sparqlTransformer.default(q, options);
+    data[0].quizTake.orderedQuestions = toArray(data[0].quizTake.orderedQuestions);
     return data;
   } catch (e) {
     console.log(e);
