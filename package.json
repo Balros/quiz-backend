@@ -16,7 +16,7 @@
     "express-validator": "^5.3.1",
     "sparql-transformer": "^2.0.5",
     "virtuoso-sparql-client": "^0.2.2",
-    "virtuoso-uid": "^1.0.7"
+    "virtuoso-uid": "git+https://github.com/Balros/virtuoso-uid.git"
   },
   "devDependencies": {
     "@babel/core": "^7.4.3",
