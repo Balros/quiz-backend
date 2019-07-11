@@ -14,7 +14,7 @@
     "express": "^4.16.4",
     "express-layout": "^0.1.0",
     "express-validator": "^5.3.1",
-    "sparql-transformer": "^2.0.5",
+    "sparql-transformer": "git+https://github.com/Balros/sparql-transformer.git",
     "virtuoso-sparql-client": "^0.2.2",
     "virtuoso-uid": "git+https://github.com/Balros/virtuoso-uid.git"
   },
