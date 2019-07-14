@@ -84,52 +84,70 @@ router.post("/api/questionGroups", async (req, res) => {
 
 router.post("/api/quizAssignments", async (req, res) => {
   const requester = req.body.token; //TODO
-
-  //TODO return only questions where i am author and show all to teacher
-  const q = {
+  let dataGeneral;
+  const q1 = {
     proto: {
       id: "?id",
       title: "$rdfs:label",
       description: "$foaf:description",
       startTime: "$foaf:startDate",
       endTime: "$foaf:endDate",
-      quiz: {
-        id: "$foaf:quiz",
-        questions: {
-          id: "$foaf:selectedQuestionInfo",
-          selectedQuestion: {
-            id: "$foaf:selectedQuestion",
-            title: "$rdfs:label"
-          }
-        }
-      },
     },
     $where: [
       "?id a foaf:QuizAssignment",
       !isTeacher(requester)
         ? "?id foaf:assignedTo <" + requester + ">"
-        : ""
-      // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
-      // !isTeacher(requester)
-      //   ? "OPTIONAL{?questionId foaf:author <" + requester + ">}"
-      //   : "",
+        : "",
+      ],
+      $prefixes: {
+        foaf: semanticWebW
+      }
+    };
+  //TODO return only questions where i am author and show all to teacher
+
+  try {
+    dataGeneral = await sparqlTransformer.default(q1, options);
+    dataGeneral = toArray(dataGeneral);
+  } catch (e) {
+    console.log(e);
+  }
+  const queryAssignedToAuthor = {
+    proto: {
+      id: "?assignmentId",
+      quizTakes: {
+        id: "$foaf:quizTake",
+        author: "$foaf:author",
+        isSubmited: "$foaf:isSubmited",
+        isReviewed: "$foaf:isReviewed"
+      },
+    },
+    $where: [
+      "?assignmentId a foaf:QuizAssignment",
+      !isTeacher(requester)
+        ? "?assignmentId foaf:assignedTo <" + requester + ">"
+        : "",
+      "?assignmentId foaf:quizTake ?quizTakeId",
+      "?quizTakeId foaf:isSubmited ?isSubmited",
     ],
-    // $filter: !isTeacher(requester) ?
-    // "(EXISTS{?id foaf:questionsAboutMe ?v3r} && ?v31 = <" + requester + ">) || NOT EXISTS{?id foaf:questionsAboutMe ?v3r}"
-    // : "",
-    //?v31 is author
+    $filter: !isTeacher(requester) ?
+    "?v11 = <" + requester + ">"
+    : "",
     $prefixes: {
       foaf: semanticWebW
     }
   };
 
   try {
-    let data = await sparqlTransformer.default(q, options);
-    data = toArray(data);
-    data.forEach(assignment => {
-      assignment.questions = toArray(assignment.questions);
-    });
-    res.status(200).json(data);
+    let dataQuizTakes = await sparqlTransformer.default(queryAssignedToAuthor, options);
+    console.log(dataQuizTakes);
+    let dataMerged = dataGeneral;
+    dataQuizTakes.map(dataAssignment => {
+      let dataAss = dataMerged.find(x => x.id === dataAssignment.id);
+      if (dataAss) {
+        dataAss.quizTakes = toArray(dataAssignment.quizTakes);
+      }
+    })
+    res.status(200).json(dataMerged);
   } catch (e) {
     console.log(e);
     res.status(500).json(e);
@@ -239,23 +257,32 @@ router.post("/api/submitQuizTake", async (req, res) => {
   if (Array.isArray(data) && data.length) {
     const quizTake = data[0];
     if (quizTake.author === user) {
-      orderedQuestions.forEach(orderedQuestion => {
-        const databaseOrderedQuestion = quizTake.orderedQuestions.find(x => x.id === orderedQuestion.id);
-          const databaseQuestionVersion = databaseOrderedQuestion.questionVersion;
-          orderedQuestion.answers.forEach(async answer => {
-            if (databaseQuestionVersion.answers.find(x => x.id === answer.id)) {
-              console.log(answer);
-              const userAnswerNode = await getNewNode("UserAnswer");
-              localStoreAdd(new Triple(userAnswerNode, "foaf:predefinedAnswer", new Node(answer.id)));
-              localStoreAdd(new Triple(userAnswerNode, "foaf:userChoice", answer.correct));
-            }
-          })
-      });
+      await Promise.all(
+        orderedQuestions.map(async orderedQuestion => {
+          const databaseOrderedQuestion = quizTake.orderedQuestions.find(x => x.id === orderedQuestion.id);
+            const databaseQuestionVersion = databaseOrderedQuestion.questionVersion;
+            await Promise.all(
+              orderedQuestion.answers.map(async answer => {
+                if (databaseQuestionVersion.answers.find(x => x.id === answer.id)) {
+                  const userAnswerNode = await getNewNode("UserAnswer");
+                  localStoreAdd(new Triple(userAnswerNode, "foaf:predefinedAnswer", new Node(answer.id)));
+                  localStoreAdd(new Triple(userAnswerNode, "foaf:userChoice", answer.correct));
+                  console.log(databaseOrderedQuestion);
+                  localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:answer", userAnswerNode));
+                }
+              })
+            );
+        })
+      );
+      console.log(quizTake.id);
+      localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isSubmited", true));
+      localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isReviewed", false));
     }
   }
   localClient
     .store(true)
     .then(result => {
+      console.log("store");
       res.status(200).json(result);
     })
     .catch(err => {
@@ -453,16 +480,17 @@ router.get("/api/getQuizTake/:id", async (req, res) => {
   const user = req.headers.token;
   const quizAssignmentId = decodeURIComponent(req.params.id);
   let data = await getQuizTake(quizAssignmentId, user);
+  console.log(data);
   if (Array.isArray(data) && data.length) {
     res.status(200).json(data[0]);
   } else {
-    // await getDataAndCreateQuizTake(quizAssignmentId, user, res);
-    // localClient
-    //   .store(true)
-    //   .then(async (result) => {
-    //     data = await getQuizTake(quizAssignmentId, user);
-    //     res.status(200).json(data[0]);
-    // })
+    await getDataAndCreateQuizTake(quizAssignmentId, user, res);
+    localClient
+      .store(true)
+      .then(async (result) => {
+        data = await getQuizTake(quizAssignmentId, user);
+        res.status(200).json(data[0]);
+    })
   }
 });
 
