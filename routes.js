@@ -139,7 +139,6 @@ router.post("/api/quizAssignments", async (req, res) => {
 
   try {
     let dataQuizTakes = await sparqlTransformer.default(queryAssignedToAuthor, options);
-    console.log(dataQuizTakes);
     let dataMerged = dataGeneral;
     dataQuizTakes.map(dataAssignment => {
       let dataAss = dataMerged.find(x => x.id === dataAssignment.id);
@@ -267,14 +266,12 @@ router.post("/api/submitQuizTake", async (req, res) => {
                   const userAnswerNode = await getNewNode("UserAnswer");
                   localStoreAdd(new Triple(userAnswerNode, "foaf:predefinedAnswer", new Node(answer.id)));
                   localStoreAdd(new Triple(userAnswerNode, "foaf:userChoice", answer.correct));
-                  console.log(databaseOrderedQuestion);
-                  localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:answer", userAnswerNode));
+                  localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:userAnswer", userAnswerNode));
                 }
               })
             );
         })
       );
-      console.log(quizTake.id);
       localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isSubmited", true));
       localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isReviewed", false));
     }
@@ -282,7 +279,6 @@ router.post("/api/submitQuizTake", async (req, res) => {
   localClient
     .store(true)
     .then(result => {
-      console.log("store");
       res.status(200).json(result);
     })
     .catch(err => {
@@ -470,7 +466,7 @@ router.get("/api/questionTypes", async (req, res) => {
   }
 });
 
-router.get("/api/getQuizTake/:id", async (req, res) => {
+router.get("/api/generateQuizTake/:id", async (req, res) => {
   res.set({
     'Access-Control-Allow-Credentials' : true,
     'Access-Control-Allow-Origin':'*',
@@ -479,18 +475,36 @@ router.get("/api/getQuizTake/:id", async (req, res) => {
   });
   const user = req.headers.token;
   const quizAssignmentId = decodeURIComponent(req.params.id);
-  let data = await getQuizTake(quizAssignmentId, user);
-  console.log(data);
+  let data = await getUnsubmitedQuizTake(quizAssignmentId, user);
   if (Array.isArray(data) && data.length) {
-    res.status(200).json(data[0]);
+    console.log("existuje vraciam ho");
+    res.status(200).json(data[0].quizTake.id);
   } else {
+    console.log("neexistuje quiz take idem ho vytvorit");
     await getDataAndCreateQuizTake(quizAssignmentId, user, res);
     localClient
       .store(true)
       .then(async (result) => {
-        data = await getQuizTake(quizAssignmentId, user);
-        res.status(200).json(data[0]);
+        data = await getUnsubmitedQuizTake(quizAssignmentId, user);
+        res.status(200).json(data[0].quizTake.id);
     })
+  }
+});
+
+router.get("/api/getQuizTake/:id", async (req, res) => {
+  res.set({
+    'Access-Control-Allow-Credentials' : true,
+    'Access-Control-Allow-Origin':'*',
+    'Access-Control-Allow-Methods':'GET',
+    'Access-Control-Allow-Headers':'application/json',
+  });
+  const user = req.headers.token;
+  const quizTakeId = decodeURIComponent(req.params.id);
+  let data = await getQuizTake(quizTakeId, user);
+  if (Array.isArray(data) && data.length) {
+    res.status(200).json(data[0]);
+  } else {
+    res.status(401).json("Unauthorized");
   }
 });
 
@@ -1338,7 +1352,6 @@ async function getDataAndCreateQuizTake(quizAssignmentId, user, res) {
           questionsVersionsIds.push(selectedQuestionInfo.selectedQuestion.public.id);
         }
       });
-
       const quizTakeNode = await createQuizTake(questionsVersionsIds, user);
       localStoreAdd(new Triple(new Node(quizAssignmentId), "foaf:quizTake", quizTakeNode));
       return;
@@ -1533,47 +1546,71 @@ const getQuizTakeById = async (quizTakeId) => {
   }
 }
 
-const getQuizTake = async (quizAssignmentId, authorId) => {
+const getQuizTake = async (quizTakeId, authorId) => {
   const q = {
     proto: {
-      id: "<" + quizAssignmentId + ">",
-      quizTake: {
-        id: "$foaf:quizTake",
-        author: "$foaf:author",
-        orderedQuestions: {
-          id: "$foaf:orderedQuestion",
-          position: "$foaf:position",
-          questionVersion: {
-            id: "$foaf:orderedQuestionVersion",
+      id: "<" + quizTakeId + ">",
+      author: "$foaf:author",
+      orderedQuestions: {
+        id: "$foaf:orderedQuestion",
+        position: "$foaf:position",
+        questionVersion: {
+          id: "$foaf:orderedQuestionVersion",
+          text: "$foaf:text",
+          answers: {
+            id: "$foaf:answer",
             text: "$foaf:text",
-            answers: {
-              id: "$foaf:answer",
-              text: "$foaf:text",
-              position: "$foaf:position",
-            }
+            position: "$foaf:position",
           }
         }
       }
     },
     $where: [
-      "<" + quizAssignmentId + "> a foaf:QuizAssignment",
-      "<" + quizAssignmentId + "> foaf:quizTake ?quizTakeId",
+      "<" + quizTakeId + "> a foaf:QuizTake",
     ],
-    $filter: "?v11 = <" + authorId + ">",
-    $orderby: ["?v121", "?v12222"],
+    $filter: "?v1 = <" + authorId + ">", //?v1 - author
+    $orderby: ["?v21", "?v2222"], //?v21, ?v2222 - position
     $prefixes: {
       foaf: semanticWebW
     }
   };
   try {
     let data = await sparqlTransformer.default(q, options);
-    data[0].quizTake.orderedQuestions = toArray(data[0].quizTake.orderedQuestions);
+    data[0].id = quizTakeId;
+    data[0].orderedQuestions = toArray(data[0].orderedQuestions);
     return data;
   } catch (e) {
     console.log(e);
     return "undefined";
   }
-} 
+}
+
+const getUnsubmitedQuizTake = async (quizAssignmentId, authorId) => {
+  const q = {
+    proto: {
+      id: "<" + quizAssignmentId + ">",
+      quizTake: {
+        id: "$foaf:quizTake",
+        author: "$foaf:author",
+      }
+    },
+    $where: [
+      "<" + quizAssignmentId + "> a foaf:QuizAssignment",
+      "<" + quizAssignmentId + "> foaf:quizTake ?quizTakeId",
+    ],
+    $filter: "?v11 = <" + authorId + ">", //TODO isSubmited not exist
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+  try {
+    let data = await sparqlTransformer.default(q, options);
+    return data;
+  } catch (e) {
+    console.log(e);
+    return "undefined";
+  }
+}
 
 const getAuthorizationData = async (topicId, author, questionId) => {
   const q = {
