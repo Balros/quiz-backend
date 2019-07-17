@@ -26,9 +26,8 @@ const options = {
 
 router.post("/api/questionGroups", async (req, res) => {
   const requester = req.body.token; //TODO
-
-  //TODO return only questions where i am author and show all to teacher
-  const q = {
+  let dataGeneralInfo;
+  const queryGeneralInfo = {
     proto: {
       id: "?id",
       name: "$foaf:name",
@@ -38,13 +37,34 @@ router.post("/api/questionGroups", async (req, res) => {
         startTime: "$foaf:startDate",
         endTime: "$foaf:endDate"
       },
+    },
+    $where: [
+      "?id a foaf:Topic",
+      !isTeacher(requester) ? "?id foaf:hasAssignment ?assignmentId" : "",
+      !isTeacher(requester)
+        ? "?assignmentId foaf:assignedTo <" + requester + ">"
+        : ""
+    ],
+    $prefixes: {
+      foaf: semanticWebW
+    }
+  };
+
+  try {
+    dataGeneralInfo = await sparqlTransformer.default(queryGeneralInfo, options);
+  } catch (e) {
+    console.log(e);
+    res.status(500).json(e);
+  }
+  const queryQuestions = {
+    proto: {
+      id: "?id",
       questions: {
         id: "$foaf:questionsAboutMe",
         author: "$foaf:author",
         approvedAsPublicId: "$foaf:approvedAsPublic",
         approvedAsPrivateId: "$foaf:approvedAsPrivate",
-        text: "$rdfs:label", //TODO
-        title: "$rdfs:label", //TODO
+        title: "$rdfs:label",
         lastSeenByStudent: "$foaf:lastSeenByStudent",
         lastSeenByTeacher: "$foaf:lastSeenByTeacher",
         lastChange: "$foaf:lastChange"
@@ -56,26 +76,26 @@ router.post("/api/questionGroups", async (req, res) => {
       !isTeacher(requester)
         ? "?assignmentId foaf:assignedTo <" + requester + ">"
         : ""
-      // !isTeacher(requester) ? "?id foaf:questionsAboutMe ?questionId" : "",
-      // !isTeacher(requester)
-      //   ? "OPTIONAL{?questionId foaf:author <" + requester + ">}"
-      //   : "",
     ],
-    // $filter: !isTeacher(requester) ?
-    // "(EXISTS{?id foaf:questionsAboutMe ?v3r} && ?v31 = <" + requester + ">) || NOT EXISTS{?id foaf:questionsAboutMe ?v3r}"
-    // : "",
-    //?v31 is author
+    $filter: !isTeacher(requester) ?
+    "?v11 = <"+ requester +">"
+    : "",
     $prefixes: {
       foaf: semanticWebW
     }
   };
 
   try {
-    let data = await sparqlTransformer.default(q, options);
-    data.forEach(topic => {
+    let dataQuestions = await sparqlTransformer.default(queryQuestions, options);
+    dataQuestions.forEach(topic => {
       topic.questions = toArray(topic.questions);
     });
-    res.status(200).json(data);
+    let dataMerged = dataGeneralInfo;
+    dataQuestions.forEach(topicQuestions => {
+      const topicMerged = dataMerged.find(x => x.id === topicQuestions.id);
+      topicMerged.questions = topicQuestions.questions;
+    });
+    res.status(200).json(dataMerged);
   } catch (e) {
     console.log(e);
     res.status(500).json(e);
@@ -103,7 +123,6 @@ router.post("/api/quizAssignments", async (req, res) => {
         foaf: semanticWebW
       }
     };
-  //TODO return only questions where i am author and show all to teacher
 
   try {
     dataGeneral = await sparqlTransformer.default(q1, options);
@@ -318,10 +337,6 @@ router.post("/api/submitReview", async (req, res) => {
   const orderedQuestions = req.body.orderedQuestions;
   const user = req.body.token;
   const data = await getQuizTakeById(quizTakeId);
-  console.log(quizTakeId);
-  console.log(orderedQuestions);
-  console.log(user);
-  console.log(data);
   if (Array.isArray(data) && data.length && isTeacher(user)) {
     const quizTake = data[0];
     const changedScoresTriples = [];
