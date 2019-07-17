@@ -7,7 +7,7 @@ const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const semanticWeb = "http://www.semanticweb.org/semanticweb";
 const semanticWebW = semanticWeb + "#";
-const clientAdress = "http://matfyz.sk:8890/sparql";
+const clientAdress = "http://127.0.0.1:8890/sparql";
 const graphName = semanticWeb;
 const format = "application/json";
 const localClient = new Client(clientAdress);
@@ -118,7 +118,11 @@ router.post("/api/quizAssignments", async (req, res) => {
         id: "$foaf:quizTake",
         author: "$foaf:author",
         isSubmited: "$foaf:isSubmited",
-        isReviewed: "$foaf:isReviewed"
+        isReviewed: "$foaf:isReviewed",
+        orderedQuestions: {
+          id: "$foaf:orderedQuestion",
+          score: "$foaf:score"
+        }
       },
     },
     $where: [
@@ -139,11 +143,24 @@ router.post("/api/quizAssignments", async (req, res) => {
 
   try {
     let dataQuizTakes = await sparqlTransformer.default(queryAssignedToAuthor, options);
+    dataQuizTakes.map(dataAssignment => {
+      dataAssignment.quizTakes = toArray(dataAssignment.quizTakes);
+      dataAssignment.quizTakes.map(quizTake => {
+        if (quizTake.isReviewed) {
+          let totalScore = 0;
+          quizTake.orderedQuestions.map(orderedQuestion =>{
+            totalScore += orderedQuestion.score;
+          })
+          quizTake.totalScore = totalScore;
+          delete quizTake.orderedQuestions;
+        }
+      })
+    })
     let dataMerged = dataGeneral;
     dataQuizTakes.map(dataAssignment => {
       let dataAss = dataMerged.find(x => x.id === dataAssignment.id);
       if (dataAss) {
-        dataAss.quizTakes = toArray(dataAssignment.quizTakes);
+        dataAss.quizTakes = dataAssignment.quizTakes;
       }
     })
     res.status(200).json(dataMerged);
@@ -260,21 +277,72 @@ router.post("/api/submitQuizTake", async (req, res) => {
         orderedQuestions.map(async orderedQuestion => {
           const databaseOrderedQuestion = quizTake.orderedQuestions.find(x => x.id === orderedQuestion.id);
             const databaseQuestionVersion = databaseOrderedQuestion.questionVersion;
-            await Promise.all(
+            let isAllRight = true;
+            await Promise.all(            
               orderedQuestion.answers.map(async answer => {
-                if (databaseQuestionVersion.answers.find(x => x.id === answer.id)) {
+                const match = databaseQuestionVersion.answers.find(x => x.id === answer.id);
+                if (match) {
                   const userAnswerNode = await getNewNode("UserAnswer");
                   localStoreAdd(new Triple(userAnswerNode, "foaf:predefinedAnswer", new Node(answer.id)));
                   localStoreAdd(new Triple(userAnswerNode, "foaf:userChoice", answer.correct));
                   localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:userAnswer", userAnswerNode));
+                  if (answer.correct !== match.correct) {
+                    isAllRight = false;
+                  }
                 }
               })
             );
+            if (isAllRight) {
+              localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:score", new Data(1, "xsd:integer")));
+            } else {
+              localStoreAdd(new Triple(new Node(databaseOrderedQuestion.id), "foaf:score", new Data(0, "xsd:integer")));
+            }
         })
       );
       localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isSubmited", true));
-      localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isReviewed", false));
     }
+  }
+  localClient
+    .store(true)
+    .then(result => {
+      res.status(200).json(result);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).json(err);
+    });
+});
+
+router.post("/api/submitReview", async (req, res) => {
+  const quizTakeId = req.body.quizTakeId
+  const orderedQuestions = req.body.orderedQuestions;
+  const user = req.body.token;
+  const data = await getQuizTakeById(quizTakeId);
+  console.log(quizTakeId);
+  console.log(orderedQuestions);
+  console.log(user);
+  console.log(data);
+  if (Array.isArray(data) && data.length && isTeacher(user)) {
+    const quizTake = data[0];
+    const changedScoresTriples = [];
+      await Promise.all(
+        orderedQuestions.map(async orderedQuestion => {
+          const databaseOrderedQuestion = quizTake.orderedQuestions.find(x => x.id === orderedQuestion.id);
+          let scoreTriple = new Triple(
+            new Node(databaseOrderedQuestion.id),
+            "foaf:score",
+            new Data(databaseOrderedQuestion.score, "xsd:integer")
+          );
+          scoreTriple.updateObject(
+            new Data(orderedQuestion.score, "xsd:integer")
+          );
+          changedScoresTriples.push(scoreTriple);
+        })
+      );
+      localClient
+        .getLocalStore()
+        .bulk(changedScoresTriples);
+      localStoreAdd(new Triple(new Node(quizTakeId), "foaf:isReviewed", true));
   }
   localClient
     .store(true)
@@ -965,6 +1033,8 @@ const createQuizAssignment = async (
 };
 
 const createQuiz = async (questions, quizOld) => {
+  console.log("createQuiz");
+  console.log(quizOld);
   let quizNode = {};
   if (quizOld) {
     quizNode = new Node(quizOld.id);
@@ -1521,10 +1591,12 @@ const getQuizTakeById = async (quizTakeId) => {
       author: "$foaf:author",
       orderedQuestions: {
         id: "$foaf:orderedQuestion",
+        score: "$foaf:score",
         questionVersion: {
           id: "$foaf:orderedQuestionVersion",
           answers: {
             id: "$foaf:answer",
+            correct: "$foaf:correct",
           }
         }
       }
@@ -1561,9 +1633,18 @@ const getQuizTake = async (quizTakeId, authorId) => {
             id: "$foaf:answer",
             text: "$foaf:text",
             position: "$foaf:position",
+            correct: "$foaf:correct"//TODO odmazat ked treba
           }
-        }
-      }
+        },
+        userAnswers: {
+          id: "$foaf:userAnswer",
+          predefinedAnswer: "$foaf:predefinedAnswer",
+          userChoice: "$foaf:userChoice",
+        },
+        score: "$foaf:score"//TODO odmazat ked treba
+      },
+      isSubmited: "$foaf:isSubmited",
+      isReviewed: "$foaf:isReviewed"
     },
     $where: [
       "<" + quizTakeId + "> a foaf:QuizTake",
@@ -1578,6 +1659,15 @@ const getQuizTake = async (quizTakeId, authorId) => {
     let data = await sparqlTransformer.default(q, options);
     data[0].id = quizTakeId;
     data[0].orderedQuestions = toArray(data[0].orderedQuestions);
+    console.log(data[0]);
+    if (!isTeacher(authorId) && !data[0].isReviewed) {
+      data[0].orderedQuestions.forEach(orderedQuestion => {
+        delete orderedQuestion.score;
+        orderedQuestion.questionVersion.answers.forEach(answer => {
+          delete answer.correct;
+        })
+      })
+    }
     return data;
   } catch (e) {
     console.log(e);
