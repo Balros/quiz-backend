@@ -61,7 +61,10 @@ router.post("/api/questionGroups", async (req, res) => {
       id: "?id",
       questions: {
         id: "$foaf:questionsAboutMe",
-        author: "$foaf:author",
+        author: {
+          id: "$foaf:author",
+          name: "$foaf:name"
+        },
         approvedAsPublicId: "$foaf:approvedAsPublic",
         approvedAsPrivateId: "$foaf:approvedAsPrivate",
         title: "$rdfs:label",
@@ -135,7 +138,10 @@ router.post("/api/quizAssignments", async (req, res) => {
       id: "?assignmentId",
       quizTakes: {
         id: "$foaf:quizTake",
-        author: "$foaf:author",
+        author: {
+          id: "$foaf:author",
+          name: "$foaf:name",
+        },
         isSubmited: "$foaf:isSubmited",
         isReviewed: "$foaf:isReviewed",
         orderedQuestions: {
