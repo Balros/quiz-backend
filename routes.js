@@ -81,7 +81,7 @@ router.post("/api/questionGroups", async (req, res) => {
         : ""
     ],
     $filter: !isTeacher(requester) ?
-    "?v11 = <"+ requester +">"
+    "?v11r = <"+ requester +">"
     : "",
     $prefixes: {
       foaf: semanticWebW
@@ -159,7 +159,7 @@ router.post("/api/quizAssignments", async (req, res) => {
       "?quizTakeId foaf:isSubmited ?isSubmited",
     ],
     $filter: !isTeacher(requester) ?
-    "?v11 = <" + requester + ">"
+    "?v11r = <" + requester + ">"
     : "",
     $prefixes: {
       foaf: semanticWebW
@@ -618,7 +618,6 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   const q = {
     proto: {
       id: "<" + questionUri + ">",
-      // id: "$var:?questionUri", //TODO change for variable
       title: "$rdfs:label", //TODO
       approvedAsPublicId: "$foaf:approvedAsPublic",
       approvedAsPrivateId: "$foaf:approvedAsPrivate",
