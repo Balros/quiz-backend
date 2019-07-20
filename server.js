@@ -17,7 +17,7 @@ const middlewares = [
   bodyParser.urlencoded({extended:true})
 ];
 var corsOptions = {
-  origin: 'https://courses.matfyz.sk:4431',
+  origin: 'https://courses.matfyz.sk',
   // origin: 'http://localhost:3000',
 }
 app.use(cors(corsOptions));
