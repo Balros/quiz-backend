@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const cors = require('cors')
 const layout = require('express-layout');
 const bodyParser = require('body-parser');
 
@@ -15,6 +16,11 @@ const middlewares = [
   express.static(path.join(__dirname, 'public')),
   bodyParser.urlencoded({extended:true})
 ];
+var corsOptions = {
+  origin: 'https://courses.matfyz.sk:4431',
+  // origin: 'http://localhost:3000',
+}
+app.use(cors(corsOptions));
 app.use(middlewares);
 app.use(bodyParser.json());
 

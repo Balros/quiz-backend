@@ -1,8 +1,8 @@
 const express = require("express");
+const cors = require("cors");
 const ID = require("virtuoso-uid");
 const router = express.Router();
 const sparqlTransformer = require("sparql-transformer");
-
 const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const semanticWeb = "http://www.semanticweb.org/semanticweb";
