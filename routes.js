@@ -8,6 +8,7 @@ const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 const semanticWeb = "http://www.semanticweb.org/semanticweb";
 const semanticWebW = semanticWeb + "#";
 const clientAdress = "http://matfyz.sk:8890/sparql";
+// const clientAdress = "http://127.0.0.1:8890/sparql";
 const graphName = semanticWeb;
 const format = "application/json";
 const localClient = new Client(clientAdress);
@@ -618,7 +619,7 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
   const q = {
     proto: {
       id: "<" + questionUri + ">",
-      title: "$rdfs:label", //TODO
+      title: "$rdfs:label",
       approvedAsPublicId: "$foaf:approvedAsPublic",
       approvedAsPrivateId: "$foaf:approvedAsPrivate",
       topic: {
@@ -655,14 +656,10 @@ router.get("/api/getQuestionVersions/:uri", async (req, res) => {
     //sort question versions by created ?v82
     //sort comments by created ?v852
     //sort answers by position ?v843
-    // $groupby:"$foaf:answer",
     $prefixes: {
       foaf: semanticWebW,
       dcterms: "http://purl.org/dc/terms/"
     }
-    // $values: {
-    //   "questionUri": questionUri
-    // },
   };
   try {
     let data = await sparqlTransformer.default(q, options);
