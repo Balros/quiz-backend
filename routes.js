@@ -7,8 +7,8 @@ const { Client, Node, Text, Data, Triple } = require("virtuoso-sparql-client");
 
 const semanticWeb = "http://www.semanticweb.org/semanticweb";
 const semanticWebW = semanticWeb + "#";
-const clientAdress = "http://matfyz.sk:8890/sparql";
-// const clientAdress = "http://127.0.0.1:8890/sparql";
+// const clientAdress = "http://matfyz.sk:8890/sparql";
+const clientAdress = "http://127.0.0.1:8890/sparql";
 const graphName = semanticWeb;
 const format = "application/json";
 const localClient = new Client(clientAdress);
