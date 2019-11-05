@@ -20,7 +20,7 @@
     "virtuoso-uid": "git+https://github.com/Balros/virtuoso-uid.git"
   },
   "devDependencies": {
-    "@babel/core": "^7.4.3",
+    "@babel/core": "^7.6.4",
     "@babel/node": "^7.2.2",
     "install": "^0.12.2",
     "nodemon": "^1.18.9",
